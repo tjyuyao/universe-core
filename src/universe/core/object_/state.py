@@ -1,5 +1,11 @@
+import json
+
+from typing import Self
+from pydantic import BaseModel
+
+
 # 定义哪些类型可以作为 State
-STATE_TYPES = (str, int, float, bool, list, dict, type(None))
+STATE_TYPES = (str, int, float, bool, list, dict, type(None), BaseModel)
 
 
 class StateType(type):
@@ -29,4 +35,16 @@ class State(metaclass=StateType):
     可以被子类化创建自定义状态类，
     也可以直接使用 primitive types (str, int, float, list, dict, bool, None)
     """
-    pass
+    
+    def model_dump_json(self, **kwargs) -> str:
+        """将状态转换为 JSON 字符串"""
+        return json.dumps(self.model_dump(), **kwargs)
+    
+    def model_dump(self) -> dict:
+        """将状态转换为 JSON 字符串"""
+        raise NotImplementedError("子类必须实现 model_dump 方法")
+    
+    @classmethod
+    def model_validate(cls, state_dict: dict) -> Self:
+        """验证状态"""
+        raise NotImplementedError("子类必须实现 model_validate 方法")
