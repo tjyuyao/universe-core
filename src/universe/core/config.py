@@ -1,6 +1,5 @@
 """配置管理 - 加载和解析 config.yml"""
 
-import os
 from dataclasses import dataclass
 from typing import Any
 from .singleton import SingletonMeta
@@ -52,7 +51,7 @@ class Config(metaclass=SingletonMeta):
         self.api_pool = [LLMConfig.from_dict(item) for item in data.get("api_pool", [])]
         self.enabled_llms = data.get("enabled_llms", [])
 
-    def get_llm_config(self, name: str = "_default") -> LLMConfig:
+    def get_llm_config(self, name: str | None = None) -> LLMConfig:
         """获取 LLM 配置
 
         Args:
@@ -64,7 +63,7 @@ class Config(metaclass=SingletonMeta):
         Raises:
             ValueError: 找不到对应的配置
         """
-        if name == "_default":
+        if name is None:
             if not self.enabled_llms:
                 raise ValueError("No enabled LLMs found")
             name = self.enabled_llms[0]
