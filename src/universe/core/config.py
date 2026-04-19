@@ -32,9 +32,11 @@ class Config(metaclass=SingletonMeta):
     """应用配置"""
     
     DEFAULT_PATH = "config.yml"
+    DEFAULT_LANG = "zh"
     
     api_pool: list[LLMConfig]
     enabled_llms: list[str]
+    translate_lang: str
 
     def __init__(self, path: str = DEFAULT_PATH) -> None:
         """从 YAML 文件加载配置
@@ -50,6 +52,7 @@ class Config(metaclass=SingletonMeta):
 
         self.api_pool = [LLMConfig.from_dict(item) for item in data.get("api_pool", [])]
         self.enabled_llms = data.get("enabled_llms", [])
+        self.translate_lang = data.get("translate_lang", self.DEFAULT_LANG)
 
     def get_llm_config(self, name: str | None = None) -> LLMConfig:
         """获取 LLM 配置
