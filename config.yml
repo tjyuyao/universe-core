@@ -1,0 +1,27 @@
+api_pool:
+    # - 
+    #     name: glm-4.7
+    #     base_url: https://open.bigmodel.cn/api/paas/v4
+    #     api_key: 4459be260be14e2f954f3ee29b3864c5.boCGL4otN2wO1db7
+    #     model: glm-4.7
+        
+    # - 
+    #     name: deepseek-chat
+    #     base_url: https://api.deepseek.com
+    #     api_key: sk-e2cd5fbd6e29493d815baa97df79ec7f
+    #     model: deepseek-chat
+    
+    - 
+        name: glm-5
+        base_url: https://opencode.ai/zen/go/v1/
+        api_key: sk-tDJtlZGIrcaVefXOBavFJi4BA64aJSlCLxOjXx8aqFtQoQmiAQSkmoSMpFTRF4Ad
+        model: glm-5
+
+    # - 
+    #     name: gemini-3-flash-preview
+    #     base_url: https://new.lemonapi.site/v1
+    #     api_key: sk-fz2DUdfz54FBpQOFtTm6jOkxfTvTnA4AiSUWh7j9CdnucWca
+    #     model: "[L]gemini-3-flash-preview"
+
+enabled_llms:
+    - glm-5
