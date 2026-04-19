@@ -1,5 +1,3 @@
-import json
-
 from typing import Self
 from pydantic import BaseModel
 
@@ -35,10 +33,6 @@ class State(metaclass=StateType):
     可以被子类化创建自定义状态类，
     也可以直接使用 primitive types (str, int, float, list, dict, bool, None)
     """
-    
-    def model_dump_json(self, **kwargs) -> str:
-        """将状态转换为 JSON 字符串"""
-        return json.dumps(self.model_dump(), **kwargs)
     
     def model_dump(self) -> dict:
         """将状态转换为 JSON 字符串"""

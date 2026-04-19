@@ -8,7 +8,7 @@ def main():
     all_orders: dict[str, DependencyOrder] = {}
 
     all_orders["core"] = DependencyOrder("core", [
-        "singleton",
+        "meta",
         "config",
         "translate",
         "llm_client",
@@ -16,7 +16,7 @@ def main():
         "memory",
         "agent",
         "universe",
-        ])
+        ], exclude_dirs=["linter"])
 
     all_orders["llm_client"] = DependencyOrder("core/llm_client", [
         "validator",
@@ -25,6 +25,14 @@ def main():
         "llm_client",
         "__init__",
         ])
+    
+    all_orders["object_"] = DependencyOrder("core/object_", [
+        "state",
+        "serializable",
+        "appearance",
+        "object_",
+        "__init__",
+        ], exclude_dirs=["linter"])
     
     all_passed = True
     for order in all_orders.values():
@@ -41,12 +49,10 @@ def main():
 class DependencyOrder:
     """依赖顺序：排序在后的模块不可从排序较前的模块导入，不能有模块未被列出。"""
     
-    DEFAULT_EXCLUDE_DIRS = ["linter"]
-
     def __init__(self, path: str, order: list[str], exclude_dirs: list[str] | None = None):
         self.path = path
         self.order = order
-        self.exclude_dirs = set(exclude_dirs or self.DEFAULT_EXCLUDE_DIRS)
+        self.exclude_dirs = set(exclude_dirs or [])
 
     def __str__(self) -> str:
         return self.path + ":" + " -> ".join(self.order)

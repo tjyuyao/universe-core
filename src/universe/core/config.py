@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
-from .singleton import SingletonMeta
+from .meta.singleton import SingletonMeta
 
 import yaml
 

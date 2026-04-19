@@ -5,15 +5,14 @@
 """
 
 import json
-import shutil
-from typing import Any, TYPE_CHECKING
+from typing import Any
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from openai import AsyncOpenAI
 
-from ..singleton import SingletonMeta
+from ..meta.singleton import SingletonMeta
 from ..config import Config, LLMConfig
 from .llm_logger import LLMLogger
 from .llm_cache import LLMCache
