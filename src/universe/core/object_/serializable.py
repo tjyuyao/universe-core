@@ -1,4 +1,4 @@
-import hjson as json
+import hjson as json  # type: ignore
 import warnings
 from pydantic_core import PydanticSerializationError
 from typing import Any
