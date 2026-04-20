@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 
-def main():
+def main() -> None:
     """主函数，检查所有依赖顺序"""
     
     all_orders: dict[str, DependencyOrder] = {}
@@ -19,6 +19,7 @@ def main():
         ], exclude_dirs=["linter"])
 
     all_orders["llm_client"] = DependencyOrder("core/llm_client", [
+        "budget",
         "validator",
         "llm_cache",
         "llm_logger",
@@ -32,7 +33,16 @@ def main():
         "appearance",
         "object_",
         "__init__",
-        ], exclude_dirs=["linter"])
+        ])
+    
+    all_orders["agent"] = DependencyOrder("core/agent", [
+        "mindset",
+        "role",
+        "soul",
+        "attention",
+        "agent",
+        "__init__",
+        ])
     
     all_passed = True
     for order in all_orders.values():
@@ -146,7 +156,7 @@ class DependencyOrder:
         规则：排序在后的模块不可从排序较前的模块导入
         """
         module_to_index = {name: i for i, name in enumerate(self.order)}
-        violations = []
+        violations: list[dict] = []
         unlisted_modules = set()
 
         base_path = self._get_base_path()
@@ -206,9 +216,10 @@ class DependencyOrder:
         if violations:
             print(f"\n❌ [{self.path}] 发现循环依赖违规 ({len(violations)} 处):")
             # 按文件分组
-            by_file = {}
+            by_file: dict[str, list] = {}
             for v in violations:
-                file_key = v["file"]
+                file_key: str = v["file"]
+                assert isinstance(file_key, str)
                 if file_key not in by_file:
                     by_file[file_key] = []
                 by_file[file_key].append(v)

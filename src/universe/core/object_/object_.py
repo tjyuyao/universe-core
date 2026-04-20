@@ -1,6 +1,6 @@
-from dataclasses import dataclass
-from typing import Type, Generic, TypeVar
-from pydantic import BaseModel
+import hjson as json  # type: ignore
+from typing import Type, Generic, TypeVar, cast
+from pydantic import BaseModel, Field
 
 from ..meta.generics_ import GenericsMeta
 from .serializable import Serializable
@@ -8,14 +8,14 @@ from .serializable import Serializable
 
 O = TypeVar("O", bound="Object")
 P = TypeVar("P", bound="Params")
-B = TypeVar("B")  # Global Broadcast
+W = TypeVar("W", bound="Object")  # World
 
 
 class Params(BaseModel):
     pass
 
 
-class Action(Generic[O, P, B], metaclass=GenericsMeta):
+class Action(Generic[O, P, W], metaclass=GenericsMeta):
 
     name: str
     description: str
@@ -39,25 +39,42 @@ class Action(Generic[O, P, B], metaclass=GenericsMeta):
             },
         }
 
-    def execute(self, obj: O, params: P, globals_: B) -> str:
+    def execute(self, obj: O, params: P, world: W) -> str:
         raise NotImplementedError("Subclasses of Action must implement execute()")
 
 
 class ActionExecutionPackage(BaseModel):
     """来自同一执行者和目标者的动作请求包"""
-    channel: Channel           # 动作通道定义
     actor_id: str              # 动作发送者 ID
-    target_id: str             # 动作接收者 ID
+    channel: Channel           # 动作通道定义
     tool_calls: list[dict]     # 实际要执行的 tool_call 列表
-    tool_call_results: dict[str, str]  # 工具调用结果列表 tool_call_id -> result
+    tool_call_results: dict[str, str] = Field(default_factory=dict) # 工具调用结果列表 tool_call_id -> result
     # TODO: add time start and duration
 
 
 class Channel(BaseModel):
+    cognitive_target: str       # 认知的目标对象别名
+    target_id: str              # 动作接收者 ID
+    budget: int | None = None   # 观察上下文预算，默认无限预算
     allowed_actions: list[str] | None = None  # 允许的工具调用名称列表，默认允许所有工具
 
+    def get_action(self, action_name: str, world: Object) -> Action:
+        """获取对象的指定动作"""
+        assert self.allowed_actions is None or action_name in self.allowed_actions, f"Action name {action_name} not allowed in channel {self.allowed_actions}"
+        target = world.objects[self.target_id]
+        action = target.actions[action_name]
+        return action
+    
+    def has_action(self, action_name: str, world: Object) -> bool:
+        return action_name in self.get_allowed_actions(world)
+    
+    def get_allowed_actions(self, world: Object) -> list[str]:
+        if self.allowed_actions:
+            return self.allowed_actions
+        target = world.objects[self.target_id]
+        return list(target.actions.keys())
 
-class Object(Generic[B], Serializable):
+class Object(Generic[W], Serializable):
     """对象基类"""
 
     object_id: str
@@ -67,7 +84,11 @@ class Object(Generic[B], Serializable):
         super().__init__()
         self.object_id = object_id
         self.actions = {action.name: action for action in (actions or [])}
-
+        
+    @property
+    def objects(self) -> dict[str, Object]:
+        return cast(dict[str, Object], self._objects)
+    
     def _validate_action_packages(self, packages: list[ActionExecutionPackage]):
         """验证动作请求包满足约束"""
 
@@ -82,10 +103,10 @@ class Object(Generic[B], Serializable):
 
         # 检查 target_id 与 当前对象 object_id 是否一致
         for package in packages:
-            if package.target_id != self.object_id:
-                raise ValueError(f"Target ID {package.target_id} does not match object ID {self.object_id}")
+            if package.channel.target_id != self.object_id:
+                raise ValueError(f"Target ID {package.channel.target_id} does not match object ID {self.object_id}")
 
-    async def _execute_action(self, tool_call: dict, globals_: B) -> str:
+    async def _execute_action(self, tool_call: dict, world: W) -> str:
         """执行工具调用"""
         action_name = tool_call["function"]["name"]
         arguments = tool_call["function"]["arguments"]
@@ -93,17 +114,13 @@ class Object(Generic[B], Serializable):
         if action is None:
             raise ValueError(f"Action {action_name} not found in object.actions")
         params = action.GetParams(arguments)
-        result = action.execute(self, params, globals_)
+        result = action.execute(self, params, world)
         return result
 
-    async def observe(self, *, budget: int | None = None, channel: Channel | None = None) -> dict:
-        """观察对象状态"""
-        return self.state_dict()
-
-    async def active(self, globals_: B) -> None:
-        """主动阶段
+    async def active(self, world: W) -> list[ActionExecutionPackage]:
+        """主动阶段（默认实现为空，子类可重写）
          
-        职责一：模拟状态随时间的自然演化
+        职责一：模拟状态随时间的自然演化（无需返回动作请求）
             例如：
             - 无控制状态转移
             - 惯性运动更新位置
@@ -111,11 +128,11 @@ class Object(Generic[B], Serializable):
             - 资源自然消耗
             - 过期数据清理
             
-        职责二：向其他对象发送动作请求
+        职责二：通过返回值向其他对象发送动作请求（参考 Agent 类的实现）
         """
-        pass
+        return []
 
-    async def passive(self, packages: list[ActionExecutionPackage], globals_: B) -> list[ActionExecutionPackage]:
+    async def passive(self, packages: list[ActionExecutionPackage], world: W) -> list[ActionExecutionPackage]:
         """被动阶段 - 接收外部动作影响
         """
         packages = await self.arbitrate(packages)
@@ -124,12 +141,16 @@ class Object(Generic[B], Serializable):
 
         for package in packages:
             for tool_call in package.tool_calls:
-                action_result = await self._execute_action(tool_call, globals_)
+                action_result = await self._execute_action(tool_call, world)
                 package.tool_call_results[tool_call["id"]] = action_result
 
         return packages
 
+    async def observe(self, channel: Channel | None = None, world: W | None = None, observer_id: str | None = None) -> str:
+        """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知马尔可夫毯可在此实现）"""
+        return json.dumps(self.state_dict(), ensure_ascii=False)
+
     async def arbitrate(self, packages: list[ActionExecutionPackage]) -> list[ActionExecutionPackage]:
-        """仲裁阶段 - 处理同时发起的多个动作请求（默认透传，子类可重写）
+        """仲裁阶段 - 处理同时发起的多个动作请求的冲突或叠加（默认透传，子类可重写）（效应马尔可夫毯可在此实现）
         """
         return packages

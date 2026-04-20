@@ -58,10 +58,6 @@ class Serializable:
         return False
 
     @property
-    def objects(self) -> dict[str, Serializable]:
-        return self._objects
-
-    @property
     def states(self) -> dict[str, State]:
         return self._states
     
