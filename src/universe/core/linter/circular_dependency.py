@@ -11,6 +11,7 @@ def main() -> None:
         "meta",
         "config",
         "translate",
+        "timing",
         "llm_client",
         "object_",
         "memory",
@@ -108,12 +109,21 @@ class DependencyOrder:
         except (SyntaxError, UnicodeDecodeError):
             return []
 
+        # 获取 TYPE_CHECKING 块的行号范围
+        type_checking_ranges = self._get_type_checking_ranges(tree)
+
         imports = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
+                # 跳过 TYPE_CHECKING 块内的导入
+                if self._is_in_type_checking_block(node.lineno, type_checking_ranges):
+                    continue
                 for alias in node.names:
                     imports.append((alias.name.split(".")[0], node.lineno))
             elif isinstance(node, ast.ImportFrom):
+                # 跳过 TYPE_CHECKING 块内的导入
+                if self._is_in_type_checking_block(node.lineno, type_checking_ranges):
+                    continue
                 if node.module:
                     # 绝对导入: from module import xxx
                     imports.append((node.module.split(".")[0], node.lineno))
@@ -128,6 +138,47 @@ class DependencyOrder:
                         if imported:
                             imports.append((imported, node.lineno))
         return imports
+
+    def _get_type_checking_ranges(self, tree: ast.AST) -> list[tuple[int, int]]:
+        """获取所有 TYPE_CHECKING 块的行号范围 [(start, end), ...]"""
+        ranges = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If):
+                # 检查是否是 TYPE_CHECKING 判断
+                if self._is_type_checking_check(node.test):
+                    # 获取该 if 块的起始和结束行号
+                    start = node.lineno
+                    end = self._get_last_line(node)
+                    ranges.append((start, end))
+        return ranges
+
+    def _is_type_checking_check(self, node: ast.AST) -> bool:
+        """检查节点是否是 TYPE_CHECKING 的判断"""
+        # 直接: if TYPE_CHECKING
+        if isinstance(node, ast.Name) and node.id == "TYPE_CHECKING":
+            return True
+        # 检查 from typing import TYPE_CHECKING 后的使用
+        # if typing.TYPE_CHECKING
+        if isinstance(node, ast.Attribute) and node.attr == "TYPE_CHECKING":
+            return True
+        return False
+
+    def _get_last_line(self, node: ast.If) -> int:
+        """获取 AST 节点的最后一行行号"""
+        last_line = node.lineno
+        for child in ast.walk(node):
+            if hasattr(child, 'lineno'):
+                lineno = getattr(child, 'lineno')
+                if isinstance(lineno, int) and lineno > last_line:
+                    last_line = lineno
+        return last_line
+
+    def _is_in_type_checking_block(self, lineno: int, ranges: list[tuple[int, int]]) -> bool:
+        """检查行号是否在 TYPE_CHECKING 块内"""
+        for start, end in ranges:
+            if start <= lineno <= end:
+                return True
+        return False
 
     def _resolve_relative_import(
         self, file_path: Path, level: int, name: str
