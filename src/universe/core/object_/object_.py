@@ -55,7 +55,21 @@ class ActionExecutionPackage(BaseModel):
     channel: Channel           # 动作通道定义
     tool_calls: list[dict]     # 实际要执行的 tool_call 列表
     tool_call_results: dict[str, str] = Field(default_factory=dict) # 工具调用结果列表 tool_call_id -> result
-    action_timing: Timing | None = Field(default=None, description="动作执行时间")
+    resources_ready_time: int | None = None  # 资源就绪时间，None 表示尚未就绪
+    resources_efficiency: float | None = Field(default=None, gt=0, le=1)  # 资源效率（0-1之间），None 表示尚未就绪
+    action_duration: int | None = None  # 动作执行时间， None 表示尚未执行完成
+
+    def get_resources_ready_time(self) -> int:
+        assert self.resources_ready_time is not None, "Resources ready time is not set"
+        return self.resources_ready_time
+    
+    def get_resources_efficiency(self) -> float:
+        assert self.resources_efficiency is not None, "Resources efficiency is not set"
+        return self.resources_efficiency
+    
+    def get_action_duration(self) -> int:
+        assert self.action_duration is not None, "Action duration is not set"
+        return self.action_duration
 
 
 class Channel(BaseModel):
@@ -133,6 +147,10 @@ class Object(Serializable):
         for package in packages:
             if package.channel.target_id != self.object_id:
                 raise ValueError(f"Target ID {package.channel.target_id} does not match object ID {self.object_id}")
+            if package.resources_ready_time is None:
+                raise ValueError(f"Resource ready time for Target ID {package.channel.target_id} is not set")
+            if package.resources_efficiency is None:
+                raise ValueError(f"Resource efficiency for Target ID {package.channel.target_id} is not set")
 
     async def _execute_action(self, tool_call: dict, world: World) -> TimedStr:
         """执行工具调用"""
@@ -163,9 +181,11 @@ class Object(Serializable):
     async def passive(self, packages: list[ActionExecutionPackage], world: World) -> list[ActionExecutionPackage]:
         """被动阶段 - 接收外部动作影响
         """
-        packages = await self.arbitrate(packages)
+        packages = await self.arbitrate(packages, world)
 
         self._validate_action_packages(packages)
+        
+        packages.sort(key=lambda x: x.get_resources_ready_time())  # 按资源就绪时间排序
 
         for package in packages:
             action_duration = 0
@@ -173,16 +193,20 @@ class Object(Serializable):
                 action_result = await self._execute_action(tool_call, world)
                 action_duration += action_result.duration
                 package.tool_call_results[tool_call["id"]] = action_result.content or ""
-            package.action_timing = Timing(start_time=world.time, duration=action_duration)
+            package.action_duration = int(action_duration / package.get_resources_efficiency())
         return packages
 
-    async def observe(self, channel: Channel | None = None, world: World | None = None, observer_id: str | None = None) -> TimedStr:
+    async def observe(self, *, channel: Channel | None = None, world: World | None = None, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知马尔可夫毯可在此实现）"""
         content = json.dumps(self.state_dict(), ensure_ascii=False)
         duration = self._observe_duration(content, world, observer_id)
         return TimedStr(duration=duration, content=content)
 
-    async def arbitrate(self, packages: list[ActionExecutionPackage]) -> list[ActionExecutionPackage]:
-        """仲裁阶段 - 处理同时发起的多个动作请求的冲突或叠加（默认透传，子类可重写）（效应马尔可夫毯可在此实现）
+    async def arbitrate(self, packages: list[ActionExecutionPackage], world: World) -> list[ActionExecutionPackage]:
+        """仲裁阶段 - 处理同时发起的多个动作请求的冲突或叠加（默认透传+资源立即就绪+100%空闲，子类可重写）（效应马尔可夫毯可在此实现）
         """
+        for package in packages:
+            if package.resources_ready_time is None:
+                package.resources_ready_time = world.time
+                package.resources_efficiency = 1.0
         return packages
