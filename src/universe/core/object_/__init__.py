@@ -1,6 +1,6 @@
 from .serializable import Serializable
 from .state import State
-from .object_ import Generic, Object, Params, Action, Channel, O, P, W, ActionExecutionPackage
+from .object_ import Generic, Object, Params, Action, Channel, O, P, ActionExecutionPackage
 
 
 __all__ = [
@@ -16,6 +16,5 @@ __all__ = [
     "Channel",
     "O",
     "P",
-    "W",
     "ActionExecutionPackage",
 ]

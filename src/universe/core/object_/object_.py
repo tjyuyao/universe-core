@@ -1,21 +1,27 @@
 import hjson as json  # type: ignore
-from typing import Type, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Type, Generic, TypeVar, cast
 from pydantic import BaseModel, Field
 
 from ..meta.generics_ import GenericsMeta
+from ..timing import Timing, TimedStr
+from ..llm_client import estimate_tokens
 from .serializable import Serializable
 
 
 O = TypeVar("O", bound="Object")
 P = TypeVar("P", bound="Params")
-W = TypeVar("W", bound="Object")  # World
+
+
+if TYPE_CHECKING:
+    from ..universe import World
+    from ..agent import Agent
 
 
 class Params(BaseModel):
     pass
 
 
-class Action(Generic[O, P, W], metaclass=GenericsMeta):
+class Action(Generic[O, P], metaclass=GenericsMeta):
 
     name: str
     description: str
@@ -39,7 +45,7 @@ class Action(Generic[O, P, W], metaclass=GenericsMeta):
             },
         }
 
-    def execute(self, obj: O, params: P, world: W) -> str:
+    def execute(self, obj: O, params: P, world: World) -> TimedStr:
         raise NotImplementedError("Subclasses of Action must implement execute()")
 
 
@@ -49,7 +55,7 @@ class ActionExecutionPackage(BaseModel):
     channel: Channel           # 动作通道定义
     tool_calls: list[dict]     # 实际要执行的 tool_call 列表
     tool_call_results: dict[str, str] = Field(default_factory=dict) # 工具调用结果列表 tool_call_id -> result
-    # TODO: add time start and duration
+    action_timing: Timing | None = Field(default=None, description="动作执行时间")
 
 
 class Channel(BaseModel):
@@ -74,20 +80,42 @@ class Channel(BaseModel):
         target = world.objects[self.target_id]
         return list(target.actions.keys())
 
-class Object(Generic[W], Serializable):
+
+class Object(Serializable):
     """对象基类"""
+    
+    DEFAULT_READ_SPEED: float = 10
 
     object_id: str
     actions: dict[str, Action]
+    read_speed: float
 
-    def __init__(self, object_id: str, actions: list[Action] | None = None):
+    def __init__(self, object_id: str, *,
+                 actions: list[Action] | None = None,
+                 read_speed: float | None = None,
+                ):
         super().__init__()
         self.object_id = object_id
         self.actions = {action.name: action for action in (actions or [])}
+        self.read_speed = read_speed or self.DEFAULT_READ_SPEED
         
     @property
     def objects(self) -> dict[str, Object]:
         return cast(dict[str, Object], self._objects)
+    
+    def _observe_duration(self, content: str, world: World | None = None, observer_id: str | None = None) -> int:
+        """计算观察对象状态的持续时间"""
+        token_count = estimate_tokens(content)
+        read_speed_gain: float
+        if world is None or observer_id is None:
+            read_speed_gain = 1.0
+        else:
+            observer = world.objects[observer_id]
+            if isinstance(observer, Agent):
+                read_speed_gain = observer.read_speed_gain
+            else:
+                read_speed_gain = 1.0
+        return int(token_count / (self.read_speed * read_speed_gain))
     
     def _validate_action_packages(self, packages: list[ActionExecutionPackage]):
         """验证动作请求包满足约束"""
@@ -106,7 +134,7 @@ class Object(Generic[W], Serializable):
             if package.channel.target_id != self.object_id:
                 raise ValueError(f"Target ID {package.channel.target_id} does not match object ID {self.object_id}")
 
-    async def _execute_action(self, tool_call: dict, world: W) -> str:
+    async def _execute_action(self, tool_call: dict, world: World) -> TimedStr:
         """执行工具调用"""
         action_name = tool_call["function"]["name"]
         arguments = tool_call["function"]["arguments"]
@@ -117,10 +145,10 @@ class Object(Generic[W], Serializable):
         result = action.execute(self, params, world)
         return result
 
-    async def active(self, world: W) -> list[ActionExecutionPackage]:
+    async def active(self, world: World) -> list[ActionExecutionPackage]:
         """主动阶段（默认实现为空，子类可重写）
          
-        职责一：模拟状态随时间的自然演化（无需返回动作请求）
+        职责一：模拟状态随时间的自然演化（更新自身状态到当前世界时间，无需返回动作请求）
             例如：
             - 无控制状态转移
             - 惯性运动更新位置
@@ -132,7 +160,7 @@ class Object(Generic[W], Serializable):
         """
         return []
 
-    async def passive(self, packages: list[ActionExecutionPackage], world: W) -> list[ActionExecutionPackage]:
+    async def passive(self, packages: list[ActionExecutionPackage], world: World) -> list[ActionExecutionPackage]:
         """被动阶段 - 接收外部动作影响
         """
         packages = await self.arbitrate(packages)
@@ -140,15 +168,19 @@ class Object(Generic[W], Serializable):
         self._validate_action_packages(packages)
 
         for package in packages:
+            action_duration = 0
             for tool_call in package.tool_calls:
                 action_result = await self._execute_action(tool_call, world)
-                package.tool_call_results[tool_call["id"]] = action_result
-
+                action_duration += action_result.duration
+                package.tool_call_results[tool_call["id"]] = action_result.content or ""
+            package.action_timing = Timing(start_time=world.time, duration=action_duration)
         return packages
 
-    async def observe(self, channel: Channel | None = None, world: W | None = None, observer_id: str | None = None) -> str:
+    async def observe(self, channel: Channel | None = None, world: World | None = None, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知马尔可夫毯可在此实现）"""
-        return json.dumps(self.state_dict(), ensure_ascii=False)
+        content = json.dumps(self.state_dict(), ensure_ascii=False)
+        duration = self._observe_duration(content, world, observer_id)
+        return TimedStr(duration=duration, content=content)
 
     async def arbitrate(self, packages: list[ActionExecutionPackage]) -> list[ActionExecutionPackage]:
         """仲裁阶段 - 处理同时发起的多个动作请求的冲突或叠加（默认透传，子类可重写）（效应马尔可夫毯可在此实现）

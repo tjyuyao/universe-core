@@ -1,6 +1,7 @@
 import warnings
 import json
-from ..object_ import Generic, Object, Action, Channel, W, ActionExecutionPackage
+from typing import TYPE_CHECKING
+from ..object_ import Generic, Object, Action, Channel, ActionExecutionPackage
 from .soul import Soul
 from .role import Role
 from .mindset import Mindset
@@ -8,23 +9,36 @@ from .attention import Attention
 from ..llm_client import LLMClient, LLMResult, estimate_tokens, BudgetWarning
 
 
+if TYPE_CHECKING:
+    from ..universe import World
+
+
 _llm_client = LLMClient()
 
 
-class Agent(Generic[W], Object[W]):
+class Agent(Object):
     
-    def __init__(self, agent_id: str, actions: list[Action] | None = None):
+    DEFAULT_READ_SPEED_GAIN: float = 1.0
+    
+    def __init__(self, agent_id: str, *,
+                 actions: list[Action] | None = None,
+                 read_speed: float | None = None,
+                 read_speed_gain: float | None = None,
+                ):
         super().__init__(
             object_id=agent_id,
-            actions=actions
+            actions=actions,
+            read_speed=read_speed,
         )
+        self.read_speed_gain = read_speed_gain or self.DEFAULT_READ_SPEED_GAIN
+        
         self.attention = Attention()
     
     @property
     def agent_id(self):
         return self.object_id
     
-    def _build_system_prompt(self, world: W) -> str:
+    def _build_system_prompt(self, world: World) -> str:
         """构建系统提示"""
         return f"""用户消息中包含最新的完整上下文。你需要根据上下文，深度扮演符合接下来描述的角色的人格，具体是指你需要做出符合角色性格、能力、情绪、思维模式的工具调用来与世界交互。只有工具调用是必要的输出，输出的 content 没有任何额外效用；但对于困难的问题，在 content 中包含临时的中间思考过程是适宜的；但长思考会影响动作发出的时延，因此如果上下文情境处于紧急场合，则不应过度思考。角色的描述如下：
 Your Identity: {self.agent_id}
@@ -34,7 +48,7 @@ Role({self.attention.get_current_role().name}): {self.attention.get_current_role
 Mindset({self.attention.get_current_mindset().name}): {self.attention.get_current_mindset().description}
 """
 
-    async def _build_user_prompt(self, world: W) -> str:
+    async def _build_user_prompt(self, world: World) -> str:
         """构建用户提示"""
         contexts = {}
         channels = self.attention.get_current_channels()
@@ -51,7 +65,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         return f"""你当前能意识和观察到的完整上下文信息如下，请阅读后决定工具调用行为：
 {contexts}"""
 
-    def _build_tools(self, world: W) -> list[dict]:
+    def _build_tools(self, world: World) -> list[dict]:
         tools = []
         
         # 按 action 名称分组
@@ -104,7 +118,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
         return new_def
         
-    def _parse_response(self, response: LLMResult, world: W) -> dict[str, list[dict]]:
+    def _parse_response(self, response: LLMResult, world: World) -> dict[str, list[dict]]:
         """解析 LLM 响应，提取工具调用"""
 
         cog_tar_tool_calls: dict[str, list[dict]] = {}  # cognitive_target -> list[tool_call]
@@ -142,7 +156,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
     
     async def _react(
         self,
-        world: W,
+        world: World,
         ) -> list[ActionExecutionPackage]:
         """推理和决策阶段（LLM Call）
         """
@@ -202,7 +216,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
     def remove_mindset(self, soul_name:str, role_name:str, name: str) -> Mindset:
         return self.attention.get_soul(soul_name).get_role(role_name).remove_mindset(name)
     
-    async def active(self, world: W) -> list[ActionExecutionPackage]:
+    async def active(self, world: World) -> list[ActionExecutionPackage]:
         actions = await self._react(world)
         return actions
         

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from ..object_ import Generic, Object, Action, W, Channel
+from ..object_ import Generic, Object, Action, Channel
 from .mindset import Mindset
 from .role import Role
 from .soul import Soul
