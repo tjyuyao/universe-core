@@ -17,6 +17,7 @@ from ..config import Config, LLMConfig
 from .llm_logger import LLMLogger
 from .llm_cache import LLMCache
 from .validator import ToolArgumentsValidator
+from .budget import estimate_tokens
 
 
 @dataclass
@@ -27,10 +28,12 @@ class LLMResult:
         thought: Agent 的想法/思考过程
         tool_calls: 工具调用列表
         log_file: 日志文件路径（可选）
+        duration: 调用持续逻辑时间
     """
     thought: str
     tool_calls: list[dict]
     log_file: Path | None = None
+    duration: float = 0.0
 
 
 class LLMClient(metaclass=SingletonMeta):
@@ -39,6 +42,7 @@ class LLMClient(metaclass=SingletonMeta):
     CACHE_DIR: Path | str = "~/.universe/llm_cache"
     LOG_DIR: Path | str = "~/.universe/llm_logs"
     MAX_LOG_SESSIONS: int = 10
+    BASE_THINK_SPEED: int = 15
     
     def __init__(self, config: Config | None = None):
         if config is None:
@@ -86,6 +90,7 @@ class LLMClient(metaclass=SingletonMeta):
         user_prompt: str | None = None,
         temperature: float = 0.7,
         tools: list[dict[str, Any]] | None = None,
+        think_speed_gain: float = 1.0,
     ) -> LLMResult:
         """完成一个 LLM 生成"""
         
@@ -162,10 +167,15 @@ class LLMClient(metaclass=SingletonMeta):
 
                 tool_call["function"]["arguments"] = arguments
         
+        thought = message.get("content", "")
+        think_speed = self.BASE_THINK_SPEED * think_speed_gain
+        duration = estimate_tokens(thought, model_name) / think_speed
+        
         return LLMResult(
-            thought=message.get("content", ""),
+            thought=thought,
             tool_calls=tool_calls,
             log_file=log_file,
+            duration=duration,
         )
 
     def _find_tool_schema(self, tools: list[dict[str, Any]], tool_name: str) -> dict | None:

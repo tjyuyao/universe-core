@@ -44,6 +44,12 @@ def main() -> None:
         "agent",
         "__init__",
         ])
+        
+    all_orders["universe"] = DependencyOrder("core/universe", [
+        "world",
+        "universe",
+        "__init__",
+        ])
     
     all_passed = True
     for order in all_orders.values():
