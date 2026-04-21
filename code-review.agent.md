@@ -38,16 +38,6 @@
   docstring mentions it but it has no effect.
 
   ---
-  DESIGN: SingletonMeta._instances is shared across all classes
-
-  src/universe/core/meta/singleton.py:7:
-  _instances: dict[type, Any] = {}
-  This class variable is shared across ALL classes using SingletonMeta. This works correctly as coded (keyed
-  by cls), but it's fragile — if a subclass and parent both use SingletonMeta, the parent's singleton will be
-  returned for the subclass too (since type.__call__ won't distinguish). Consider using cls.__dict__ or making
-   each class have its own instance slot.
-
-  ---
   DESIGN: Serializable.__setattr__ catches too broadly
 
   src/universe/core/object_/object_.py and serializable.py — The State metaclass makes isinstance(x, State)
