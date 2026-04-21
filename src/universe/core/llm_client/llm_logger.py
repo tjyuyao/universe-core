@@ -9,7 +9,7 @@ from ..config import LLMConfig
 
 class LLMLogger():
     """LLM 日志记录器"""
-    
+
     def __init__(self, request_log_dir: Path, max_log_sessions: int = 10) -> None:
         self._request_log_dir = request_log_dir
         self._max_log_sessions = max_log_sessions

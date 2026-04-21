@@ -4,7 +4,7 @@ from pathlib import Path
 
 def main() -> None:
     """主函数，检查所有依赖顺序"""
-    
+
     all_orders: dict[str, DependencyOrder] = {}
 
     all_orders["core"] = DependencyOrder("core", [
@@ -27,7 +27,7 @@ def main() -> None:
         "llm_client",
         "__init__",
         ])
-    
+
     all_orders["object_"] = DependencyOrder("core/object_", [
         "state",
         "serializable",
@@ -35,7 +35,7 @@ def main() -> None:
         "object_",
         "__init__",
         ])
-    
+
     all_orders["agent"] = DependencyOrder("core/agent", [
         "mindset",
         "role",
@@ -44,13 +44,13 @@ def main() -> None:
         "agent",
         "__init__",
         ])
-        
+
     all_orders["universe"] = DependencyOrder("core/universe", [
         "world",
         "universe",
         "__init__",
         ])
-    
+
     all_passed = True
     for order in all_orders.values():
         if not order.check_and_report():
@@ -65,7 +65,7 @@ def main() -> None:
 
 class DependencyOrder:
     """依赖顺序：排序在后的模块不可从排序较前的模块导入，不能有模块未被列出。"""
-    
+
     def __init__(self, path: str, order: list[str], exclude_dirs: list[str] | None = None):
         self.path = path
         self.order = order

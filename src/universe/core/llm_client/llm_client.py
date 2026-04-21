@@ -37,13 +37,13 @@ class LLMResult:
 
 
 class LLMClient(metaclass=SingletonMeta):
-    
+
     CACHE_MAX_SIZE: int = 128
     CACHE_DIR: Path | str = "~/.universe/llm_cache"
     LOG_DIR: Path | str = "~/.universe/llm_logs"
     MAX_LOG_SESSIONS: int = 10
     BASE_THINK_SPEED: int = 15
-    
+
     def __init__(self, config: Config | None = None):
         if config is None:
             config = Config()
@@ -52,15 +52,15 @@ class LLMClient(metaclass=SingletonMeta):
         self._cache = LLMCache(max_size=self.CACHE_MAX_SIZE, cache_dir=Path(self.CACHE_DIR))
         self._logger = LLMLogger(Path(self.LOG_DIR), max_log_sessions=self.MAX_LOG_SESSIONS)
         self._validator = ToolArgumentsValidator()
-    
+
     def _get_client(self, model: str | None = None) -> AsyncOpenAI:
         """获取或创建 AsyncOpenAI 客户端"""
         if model is None:
             model = self._config.enabled_llms[0]
-            
+
         if model not in self._config.enabled_llms:
             raise ValueError(f"LLM {model} is not enabled in the config.")
-        
+
         if model not in self._clients:
             llm_config = self._config.get_llm_config(model)
             self._clients[model] = AsyncOpenAI(
@@ -68,22 +68,22 @@ class LLMClient(metaclass=SingletonMeta):
                 base_url=llm_config.base_url,
             )
         return self._clients[model]
-    
+
     def _build_messages(self, system_prompt: str | None = None, user_prompt: str | None = None) -> list[dict[str, str]]:
         """构建固定格式的消息列表"""
-        
+
         messages = []
-        
+
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-            
+
         if user_prompt:
             messages.append({"role": "user", "content": user_prompt})
-        
+
         return messages
 
     async def complete(
-        self, 
+        self,
         *,
         model: str | None = None,
         system_prompt: str | None = None,
@@ -93,12 +93,12 @@ class LLMClient(metaclass=SingletonMeta):
         think_speed_gain: float = 1.0,
     ) -> LLMResult:
         """完成一个 LLM 生成"""
-        
+
         messages = self._build_messages(system_prompt, user_prompt)
         llm_config: LLMConfig = self._config.get_llm_config(model)
         model_name = llm_config.model
         timestamp = datetime.now()
-        
+
         # 尝试从缓存获取
         cache_hit = False
         if self._cache is not None:
@@ -125,9 +125,9 @@ class LLMClient(metaclass=SingletonMeta):
             if tools:
                 params["tools"] = tools
 
-            result = await self._get_client(model).chat.completions.create(**params)    
+            result = await self._get_client(model).chat.completions.create(**params)
             response_data = result.model_dump()
-            
+
             # 写入缓存
             if self._cache is not None:
                 self._cache.set(
@@ -147,7 +147,7 @@ class LLMClient(metaclass=SingletonMeta):
             response_data=response_data,
             cache_hit=cache_hit,
         )
-        
+
         # 解析响应
         message: dict[str, Any] = response_data["choices"][0]["message"]
         tool_calls = message.get("tool_calls") or []
@@ -170,7 +170,7 @@ class LLMClient(metaclass=SingletonMeta):
         thought = message.get("content", "")
         think_speed = self.BASE_THINK_SPEED * think_speed_gain
         duration = estimate_tokens(thought, model_name) / think_speed
-        
+
         return LLMResult(
             thought=thought,
             tool_calls=tool_calls,

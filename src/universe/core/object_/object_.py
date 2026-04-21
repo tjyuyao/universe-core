@@ -30,7 +30,7 @@ class Action(Generic[O, P], metaclass=GenericsMeta):
     @classmethod
     def GetParamsType(cls) -> Type[P]:
         return cls._generics[1]
-    
+
     @classmethod
     def GetParams(cls, arguments: dict) -> P:
         return cls.GetParamsType().model_validate(arguments)
@@ -45,7 +45,7 @@ class Action(Generic[O, P], metaclass=GenericsMeta):
                 "parameters": self.GetParamsType().model_json_schema(),
             },
         }
-    
+
     def execute(self, obj: O, params: P, actor: Agent, world: World) -> TimedStr:
         raise NotImplementedError("Subclasses of Action must implement execute() or arbitrate()")
 
@@ -69,17 +69,17 @@ class Channel(BaseModel):
     target_id: str                            # 动作接收者 ID
     budget: int | None = None                 # 观察上下文预算，默认无限预算
     allowed_actions: list[str] | None = None  # 允许的动作名称列表，默认允许所有动作
-    
+
     def get_action(self, action_name: str, world: World) -> Action:
         """获取对象的指定动作"""
         assert self.allowed_actions is None or action_name in self.allowed_actions, f"Action name {action_name} not allowed in channel {self.allowed_actions}"
         target = world.objects[self.target_id]
         action = target.actions[action_name]
         return action
-    
+
     def has_action(self, action_name: str, world: World) -> bool:
         return action_name in self.get_allowed_actions(world)
-    
+
     def get_allowed_actions(self, world: World) -> list[str]:
         if self.allowed_actions:
             return self.allowed_actions
@@ -89,7 +89,7 @@ class Channel(BaseModel):
 
 class Object(Serializable):
     """对象基类"""
-    
+
     DEFAULT_READ_SPEED: float = 10
     DEFAULT_CAPACITY: int = 1        # 默认容量为1，即只能同时处理一个动作
 
@@ -108,12 +108,12 @@ class Object(Serializable):
         self.actions = {action.name: action for action in (actions or [])}
         self.read_speed = read_speed or self.DEFAULT_READ_SPEED
         self.capacity = capacity or self.DEFAULT_CAPACITY
-    
+
     @property
     def objects(self) -> dict[str, Object]:
         """当前对象所持有的子对象字典，键为子对象 ID，值为子对象"""
         return cast(dict[str, Object], self._objects)
-    
+
     def _observe_duration(self, content: str, world: World | None = None, observer_id: str | None = None) -> float:
         """计算观察对象状态的持续时间"""
         token_count = estimate_tokens(content)
@@ -129,7 +129,7 @@ class Object(Serializable):
                 read_speed_gain = 1.0
         assert self.read_speed > 0, f"Object {self.object_id}'s read speed must be greater than 0"
         return token_count / (self.read_speed * read_speed_gain)
-    
+
     def _validate_action_packages(self, packages: list[ActionExecutionPackage]):
         """验证动作请求包满足约束"""
 
@@ -160,7 +160,7 @@ class Object(Serializable):
 
     async def active(self, world: World) -> list[ActionExecutionPackage]:
         """主动阶段（默认实现为空，子类可重写）
-         
+
         职责一：模拟状态随时间的自然演化（更新自身状态到当前世界时间，无需返回动作请求）
             例如：
             - 无控制状态转移
@@ -168,7 +168,7 @@ class Object(Serializable):
             - 随着年龄衰老
             - 资源自然消耗
             - 过期数据清理
-            
+
         职责二：通过返回值向其他对象发送动作请求（参考 Agent 类的实现）
         """
         assert isinstance(world, World)

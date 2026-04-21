@@ -8,9 +8,9 @@ class Role(BaseModel):
 
     def add_mindset(self, mindset: Mindset):
         self.mindsets[mindset.name] = mindset
-    
+
     def get_mindset(self, name: str) -> Mindset:
         return self.mindsets[name]
-    
+
     def remove_mindset(self, name: str) -> Mindset:
         return self.mindsets.pop(name)

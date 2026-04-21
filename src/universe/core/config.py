@@ -30,10 +30,10 @@ class LLMConfig:
 @dataclass
 class Config(metaclass=SingletonMeta):
     """应用配置"""
-    
+
     DEFAULT_PATH = "config.yml"
     DEFAULT_LANG = "zh"
-    
+
     api_pool: list[LLMConfig]
     enabled_llms: list[str]
     translate_lang: str
