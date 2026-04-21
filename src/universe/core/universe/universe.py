@@ -5,11 +5,12 @@ from .world import World
 class Universe(Serializable):
     """宇宙基类"""
     
-    def __init__(self, name: str, worlds: dict[str, World] = {}):
+    def __init__(self, name: str, worlds: dict[str, World] | None = None):
         super().__init__()
         self.name = name
-        for world_name, world in worlds.items():
-            self.add_world(world_name, world)
+        if worlds is not None:
+            for world_name, world in worlds.items():
+                self.add_world(world_name, world)
     
     @property
     def worlds(self) -> dict[str, World]:

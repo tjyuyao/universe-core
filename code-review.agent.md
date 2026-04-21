@@ -15,14 +15,6 @@
   - Rotate all exposed keys immediately
 
   ---
-  BUG: Universe.__init__ mutable default argument
-
-  src/universe/core/universe/universe.py:8:
-  def __init__(self, name: str, worlds: dict[str, World] = {}):
-  Classic Python mutable default argument trap. All instances share the same dict. Use None with a default
-  inside the body.
-
-  ---
   BUG: Action.GetParams incorrect call
 
   src/universe/core/object_/object_.py:35:
