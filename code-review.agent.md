@@ -15,14 +15,6 @@
   - Rotate all exposed keys immediately
 
   ---
-  BUG: Action.GetParams incorrect call
-
-  src/universe/core/object_/object_.py:35:
-  return cls.GetParamsType().model_validate_json(**arguments)
-  model_validate_json expects a single str argument (JSON string), not **kwargs. This should likely be
-  model_validate(arguments) since arguments is already a dict at this point.
-
-  ---
   BUG: LLMCache.get() signature mismatch with _generate_key()
 
   src/universe/core/llm_client/llm_cache.py:194 — get() accepts max_tokens parameter but doesn't pass it to

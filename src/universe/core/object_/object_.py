@@ -32,7 +32,7 @@ class Action(Generic[O, P], metaclass=GenericsMeta):
     
     @classmethod
     def GetParams(cls, arguments: dict) -> P:
-        return cls.GetParamsType().model_validate_json(**arguments)
+        return cls.GetParamsType().model_validate(arguments)
 
     def get_llm_tool_definition(self) -> dict:
         """获取 OpenAI function calling 格式的工具定义"""
