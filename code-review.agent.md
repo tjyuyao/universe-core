@@ -15,35 +15,6 @@
   - Rotate all exposed keys immediately
 
   ---
-  BUG: UnboundLocalError in LLMClient.complete()
-
-  src/universe/core/llm_client/llm_client.py:170 — message and tool_calls are only defined inside the if
-  tools: block (line 154), but are referenced unconditionally at lines 170-172:
-
-  thought = message.get("content", "")          # line 170
-  think_speed = self.BASE_THINK_SPEED * think_speed_gain
-  duration = estimate_tokens(thought, model_name) / think_speed
-
-  If tools is None/empty, message and tool_calls are never assigned, causing UnboundLocalError. The return
-  statement at line 174 also references tool_calls.
-
-  Fix: Extract message and tool_calls from response_data before the if tools: block.
-
-  ---
-  BUG: World.__init__() missing super().__init__()
-
-  src/universe/core/universe/world.py:17-21 — World extends Serializable, but never calls super().__init__().
-  Serializable.__init__ initializes _objects and _states, so any attribute assignment that triggers
-  __setattr__ will crash with AttributeError because _objects/_states don't exist yet.
-
-  Same issue in universe.py:8 — Universe.__init__ does call super().__init__(), but assigns self.name = name
-  before calling it (line 10 vs line 9... actually it calls super first, but name is a str, which is a State
-  type, so it goes through register_state - this works).
-
-  Wait, re-reading World.__init__: it sets self.name and self.description without calling super().__init__()
-  first. Since __setattr__ checks hasattr(self, "_objects"), this will raise AssertionError.
-
-  ---
   BUG: World.step() crashes when objects have no active packages
 
   src/universe/core/universe/world.py:55 — In the passive phase:

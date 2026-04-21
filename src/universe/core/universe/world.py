@@ -15,6 +15,7 @@ class World(Serializable):
     _init_time: float        # 世界开始时间 (const)
 
     def __init__(self, name: str, description: str, init_time: float | None = None) -> None:
+        super().__init__()
         self.name = name
         self.description = description
         self._time = 0
