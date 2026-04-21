@@ -6,6 +6,7 @@ from ..meta.generics_ import GenericsMeta
 from ..timing import TimedStr
 from ..llm_client import estimate_tokens
 from .serializable import Serializable
+from .state import State
 
 
 O = TypeVar("O", bound="Object")
@@ -92,10 +93,10 @@ class Object(Serializable):
     DEFAULT_READ_SPEED: float = 10
     DEFAULT_CAPACITY: int = 1        # 默认容量为1，即只能同时处理一个动作
 
-    object_id: str                   # 对象 ID
+    object_id: State[str]            # 对象 ID
     actions: dict[str, Action]       # 支持的动作字典，键为动作名称，值为动作对象
-    read_speed: float                # 观察对象状态的速度，单位为 tokens/second
-    capacity: int                    # 客体对象最大动作并发数，0 表示无限并发
+    read_speed: State[float]         # 观察对象状态的速度，单位为 tokens/second
+    capacity: State[int]             # 客体对象最大动作并发数，0 表示无限并发
 
     def __init__(self, object_id: str, *,
                  actions: list[Action] | None = None,

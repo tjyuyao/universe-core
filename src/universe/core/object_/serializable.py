@@ -1,9 +1,14 @@
 import hjson as json  # type: ignore
 import warnings
 from pydantic_core import PydanticSerializationError
-from typing import Any
+from pydantic import BaseModel
+from typing import Any, ClassVar, get_type_hints
 from ..translate import translate
-from .state import State, BaseModel
+from .state import BaseState, is_state_annotation
+
+
+# Type alias for valid state value types
+StateValue = int | float | str | bool | None | list | tuple | dict | BaseModel | BaseState
 
 
 class Serializable:
@@ -11,10 +16,28 @@ class Serializable:
     
     _objects: dict[str, Serializable]
     """持有的对象字典，键为属性名，值为对象实例"""
-    
-    _states: dict[str, State]
+
+    _states: dict[str, StateValue]
     """对象的状态字典，键为属性名，值为属性值"""
-    
+
+    _state_fields_: ClassVar[set[str]] = set()
+    """类级别的状态字段集合，通过 State[T] 注解自动收集"""
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Collect field names with State[T] annotations
+        try:
+            hints = get_type_hints(cls, include_extras=True)
+            cls._state_fields_ = {
+                name for name, hint in hints.items() if is_state_annotation(hint)
+            }
+        except NameError:
+            warnings.warn(
+                f"Failed to resolve type hints for {cls.__name__}, _state_fields_ will be empty",
+                UserWarning,
+            )
+            cls._state_fields_ = set()
+
     def __init__(self):
         self._objects = {}
         self._states = {}
@@ -32,7 +55,7 @@ class Serializable:
         
         if isinstance(value, Serializable):
             self.register_object(name, value)
-        elif isinstance(value, State):
+        elif name in type(self)._state_fields_:
             self.register_state(name, value)
         else:
             super().__setattr__(name, value)
@@ -58,11 +81,11 @@ class Serializable:
         return False
 
     @property
-    def states(self) -> dict[str, State]:
+    def states(self) -> dict[str, StateValue]:
         return self._states
     
     @staticmethod
-    def serialize_state(state: State, name: str) -> Any:
+    def serialize_state(state: StateValue, name: str) -> Any:
         """序列化状态变量到字典"""
         if isinstance(state, (int, float, str, bool, type(None))):
             return state
@@ -79,7 +102,7 @@ class Serializable:
             except (TypeError, PydanticSerializationError):
                 raise TypeError(translate(f"状态变量 '{name}' 不可序列化"))
             return data
-        elif isinstance(state, State):
+        elif isinstance(state, BaseState):
             try:
                 data = state.model_dump()
                 json.dumps(data, ensure_ascii=False)
@@ -113,10 +136,9 @@ class Serializable:
             elif isinstance(state, (list, tuple, dict)):
                 self._states[name] = state_dict[name]
             elif isinstance(state, BaseModel):
-                # BaseModel 检查必须在 State 之前
-                self._states[name] = state.model_validate(state_dict[name]) 
-            elif isinstance(state, State):
-                self._states[name] = state.model_validate(state_dict[name]) 
+                self._states[name] = state.model_validate(state_dict[name])
+            elif isinstance(state, BaseState):
+                self._states[name] = state.model_validate(state_dict[name])
             else:
                 raise TypeError(translate(f"未支持的状态变量类型 '{type(state)}'"))
             used_keys.add(name)
@@ -140,7 +162,7 @@ class Serializable:
             raise ValueError(translate(f"对象 '{name}' 存在循环引用"))
         self._objects[name] = obj
     
-    def register_state(self, name: str, state: State) -> None:
+    def register_state(self, name: str, state: StateValue) -> None:
         """注册一个状态变量"""
         if name in self._objects:
             raise ValueError(translate(f"不允许同名的状态变量与对象 '{name}'"))
@@ -159,7 +181,7 @@ class Serializable:
                 json.dumps(data, ensure_ascii=False)
             except (TypeError, PydanticSerializationError):
                 raise TypeError(translate(f"状态变量 '{name}' 不可序列化"))
-        elif isinstance(state, State):
+        elif isinstance(state, BaseState):
             try:
                 data = state.model_dump()
                 json.dumps(data, ensure_ascii=False)

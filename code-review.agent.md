@@ -5,15 +5,6 @@
   observe-think-act loop with logical time. Interesting design. Here are my findings:
 
   ---
-  DESIGN: Serializable.__setattr__ catches too broadly
-
-  src/universe/core/object_/object_.py and serializable.py — The State metaclass makes isinstance(x, State)
-  return True for str, int, float, bool, list, dict, None, and BaseModel. This means almost every attribute
-  assignment goes through register_state() rather than normal __setattr__. Properties like object_id,
-  read_speed, capacity, actions (which is a dict) will all be treated as state variables. The actions dict
-  specifically would be registered as a state and serialized, which likely isn't intended.
-
-  ---
   DESIGN: translate() is a naive string-replace
 
   src/universe/core/translate/__init__.py — Uses sequential str.replace() which is order-dependent and can

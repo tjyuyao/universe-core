@@ -1,7 +1,7 @@
 import warnings
 import json
 from typing import TYPE_CHECKING
-from ..object_ import Generic, Object, Action, Channel, ActionExecutionPackage
+from ..object_ import Object, Action, Channel, ActionExecutionPackage, State
 from ..llm_client import LLMClient, LLMResult, estimate_tokens, BudgetWarning
 from ..timing import TimedStr
 
@@ -23,7 +23,10 @@ class Agent(Object):
     DEFAULT_READ_SPEED_GAIN: float = 1.0
     DEFAULT_THINK_SPEED_GAIN: float = 1.0
     
-    _busy_until: float
+    _busy_until: State[float]
+    read_speed_gain: State[float]
+    think_speed_gain: State[float]
+    attention: State[Attention]
     
     def __init__(self, agent_id: str, *,
                  actions: list[Action] | None = None,
