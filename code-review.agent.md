@@ -48,12 +48,6 @@
    each class have its own instance slot.
 
   ---
-  DESIGN: _cleanup_old_sessions is never called
-
-  src/universe/core/llm_client/llm_logger.py:123 — _cleanup_old_sessions() is defined but never invoked
-  anywhere. It should probably be called in __init__ or write_request_log.
-
-  ---
   DESIGN: Serializable.__setattr__ catches too broadly
 
   src/universe/core/object_/object_.py and serializable.py — The State metaclass makes isinstance(x, State)

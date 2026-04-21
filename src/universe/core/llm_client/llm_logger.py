@@ -15,6 +15,7 @@ class LLMLogger():
         self._max_log_sessions = max_log_sessions
         self._current_session_dir = self._request_log_dir / datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         self._current_session_dir.mkdir(parents=True, exist_ok=True)
+        self._cleanup_old_sessions()
 
     def write_request_log(
         self,
