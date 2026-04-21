@@ -148,12 +148,12 @@ class LLMClient(metaclass=SingletonMeta):
             cache_hit=cache_hit,
         )
         
+        # 解析响应
+        message: dict[str, Any] = response_data["choices"][0]["message"]
+        tool_calls = message.get("tool_calls") or []
+
         # 校验与修复工具调用参数
         if tools:
-            # 解析响应
-            message: dict[str, Any] = response_data["choices"][0]["message"]
-            tool_calls = message.get("tool_calls") or []
-
             # 验证并修复每个 tool_call 的参数
             for tool_call in tool_calls:
                 arguments = tool_call["function"]["arguments"]
@@ -166,7 +166,7 @@ class LLMClient(metaclass=SingletonMeta):
                     arguments = self._validator.validate(arguments, tool_schema)
 
                 tool_call["function"]["arguments"] = arguments
-        
+
         thought = message.get("content", "")
         think_speed = self.BASE_THINK_SPEED * think_speed_gain
         duration = estimate_tokens(thought, model_name) / think_speed
