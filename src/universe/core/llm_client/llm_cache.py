@@ -161,7 +161,6 @@ class LLMCache:
             model: 模型名称
             messages: 消息列表
             temperature: 采样温度
-            max_tokens: 最大 token 数
             tools: 工具定义
 
         Returns:
@@ -190,7 +189,6 @@ class LLMCache:
         model: str,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any] | None:
         """获取缓存
@@ -199,7 +197,6 @@ class LLMCache:
             model: 模型名称
             messages: 消息列表
             temperature: 采样温度
-            max_tokens: 最大 token 数
             tools: 工具定义
 
         Returns:

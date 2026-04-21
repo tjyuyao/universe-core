@@ -15,13 +15,6 @@
   - Rotate all exposed keys immediately
 
   ---
-  BUG: LLMCache.get() signature mismatch with _generate_key()
-
-  src/universe/core/llm_client/llm_cache.py:194 — get() accepts max_tokens parameter but doesn't pass it to
-  _generate_key() and _generate_key() doesn't accept it either. The max_tokens param is dead code. The
-  docstring mentions it but it has no effect.
-
-  ---
   DESIGN: Serializable.__setattr__ catches too broadly
 
   src/universe/core/object_/object_.py and serializable.py — The State metaclass makes isinstance(x, State)
