@@ -625,7 +625,6 @@ source = { editable = "." }
 dependencies = [
     { name = "hjson" },
     { name = "jieba" },
-    { name = "mypy" },
     { name = "openai" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -644,7 +643,6 @@ dev = [
 requires-dist = [
     { name = "hjson", specifier = ">=3.1.0" },
     { name = "jieba", specifier = ">=0.42.1" },
-    { name = "mypy", specifier = ">=1.20.1" },
     { name = "openai", specifier = ">=2.32.0" },
     { name = "pydantic", specifier = ">=2.13.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },

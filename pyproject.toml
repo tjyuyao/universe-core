@@ -10,7 +10,6 @@ requires-python = ">=3.14"
 dependencies = [
     "hjson>=3.1.0",
     "jieba>=0.42.1",
-    "mypy>=1.20.1",
     "openai>=2.32.0",
     "pydantic>=2.13.2",
     "pyyaml>=6.0.3",

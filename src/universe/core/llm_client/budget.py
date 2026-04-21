@@ -1,4 +1,4 @@
-import hjson as json  # type: ignore
+import hjson  # type: ignore
 import tiktoken  # type: ignore
 from typing import Any
 from pydantic import BaseModel
@@ -22,9 +22,9 @@ def estimate_tokens(content: Any, model: str | None = None) -> int:
     if isinstance(content, str):
         text = content
     elif isinstance(content, BaseModel):
-        text = json.dumps(content.model_dump(), ensure_ascii=False)
+        text = hjson.dumps(content.model_dump(), ensure_ascii=False)
     else:
-        text = json.dumps(content, ensure_ascii=False)
+        text = hjson.dumps(content, ensure_ascii=False)
 
     try:
         encoding = tiktoken.encoding_for_model(model or _config.get_llm_config().model)

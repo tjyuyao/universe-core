@@ -13,6 +13,7 @@ import hashlib
 import json
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,8 +33,8 @@ class CacheEntry:
     key_hash: str
     request: dict[str, Any]
     response: dict[str, Any]
-    created_at: str = field(default_factory=lambda: __import__('datetime').datetime.now().isoformat())
-    accessed_at: str = field(default_factory=lambda: __import__('datetime').datetime.now().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    accessed_at: str = field(default_factory=lambda: datetime.now().isoformat())
     access_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:

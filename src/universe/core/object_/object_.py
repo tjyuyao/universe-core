@@ -1,4 +1,4 @@
-import hjson as json  # type: ignore
+import hjson  # type: ignore
 from typing import TYPE_CHECKING, Type, Generic, TypeVar, cast
 from pydantic import BaseModel, Field
 
@@ -190,6 +190,6 @@ class Object(Serializable):
 
     async def observe(self, *, channel: Channel | None = None, world: World | None = None, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知与效应马尔可夫毯均可在此实现）"""
-        content = json.dumps(self.state_dict(), ensure_ascii=False)
+        content = hjson.dumps(self.state_dict(), ensure_ascii=False)
         duration = self._observe_duration(content, world, observer_id)
         return TimedStr(duration=duration, content=content)
