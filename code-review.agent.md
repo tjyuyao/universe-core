@@ -15,14 +15,6 @@
   - Rotate all exposed keys immediately
 
   ---
-  BUG: World.step() crashes when objects have no active packages
-
-  src/universe/core/universe/world.py:55 — In the passive phase:
-  object_packages = await obj.passive(router[obj.object_id], self)
-  If no active packages target this object, router[obj.object_id] raises KeyError. Should use
-  router.get(obj.object_id, []).
-
-  ---
   BUG: Universe.__init__ mutable default argument
 
   src/universe/core/universe/universe.py:8:

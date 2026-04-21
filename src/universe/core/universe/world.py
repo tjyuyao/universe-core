@@ -53,7 +53,7 @@ class World(Serializable):
     
         # 被动阶段
         for obj in self.objects.values():
-            object_packages = await obj.passive(router[obj.object_id], self)
+            object_packages = await obj.passive(router.get(obj.object_id, []), self)
             for pkg in object_packages:
                 actor = self.objects[pkg.actor_id]
                 assert isinstance(actor, Agent)
