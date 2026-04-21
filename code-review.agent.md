@@ -5,16 +5,6 @@
   observe-think-act loop with logical time. Interesting design. Here are my findings:
 
   ---
-  CRITICAL: Security - API Keys in Config
-
-  config.yml — API keys are committed to git in plaintext (both active and commented-out). Even though some
-  are commented out, they're in version history.
-
-  - Move to environment variables or a .env file
-  - Add config.yml to .gitignore and provide a config.yml.example instead
-  - Rotate all exposed keys immediately
-
-  ---
   DESIGN: Serializable.__setattr__ catches too broadly
 
   src/universe/core/object_/object_.py and serializable.py — The State metaclass makes isinstance(x, State)
