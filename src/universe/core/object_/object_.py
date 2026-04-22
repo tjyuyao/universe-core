@@ -96,17 +96,17 @@ class Activity(BaseModel):
 
     async def transit(self, obj: Object, world: World) -> bool:
         """执行到当前时间点
-        
+
         Returns:
             done(bool): 到世界时间为止，是否足以完成所有动作
         """
         # Return Case 1: Action scheduled in the future, i.e. not even started, so not done (False).
         if world.time < self.action_invoke_time:
             return False
-        
+
         actor = world.agents[self.actor_id]
         assert isinstance(actor, Agent)
-        
+
         # Now execute the actions that are not finished yet until the current time.
         busy_until = self.action_invoke_time
         for context in self.action_contexts.values():
@@ -238,7 +238,7 @@ class Object(Serializable):
             raise ValueError(f"Action {action_name} not found in Object {self.object_id}")
         params = action.GetParams(arguments)
         return action, params
-    
+
     def enqueue_activity(self, activity: Activity) -> None:
         """添加动作请求包到队列"""
         self._validate_action_package(activity)
