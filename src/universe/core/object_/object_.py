@@ -109,7 +109,9 @@ class Activity(BaseModel):
             return False
 
         actor = world.agents[self.actor_id]
-        assert isinstance(actor, Agent)
+        # Lazy import Agent to avoid circular import at module load time
+        from ..agent import Agent
+        assert isinstance(actor, Agent), f"Actor {self.actor_id} must be an Agent"
 
         # Now execute the actions that are not finished yet until the current time.
         busy_until = self.action_invoke_time
@@ -147,7 +149,9 @@ class Activity(BaseModel):
         busy_until = self.action_invoke_time
         for context in self.action_contexts.values():
             if context.is_finished():
-                busy_until = context.end_time
+                # Only update busy_until if context has started (has valid end_time)
+                if context.start_time is not None:
+                    busy_until = context.end_time
                 continue
             break
         return busy_until
@@ -215,6 +219,8 @@ class Object(Serializable):
             read_speed_gain = 1.0
         else:
             observer = world.objects[observer_id]
+            # Lazy import Agent to avoid circular import at module load time
+            from ..agent import Agent
             if isinstance(observer, Agent):
                 read_speed_gain = observer.read_speed_gain
                 assert read_speed_gain > 0, f"Observer {observer_id}'s read speed gain must be greater than 0"

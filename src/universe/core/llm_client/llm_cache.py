@@ -3,7 +3,7 @@
 提供基于文件系统的 LLM 响应缓存，支持：
 - SHA256 哈希键生成
 - LRU 淘汰策略（默认 128 条）
-- 用户家目录存储（~/.ganttworld/llm_cache/）
+- 用户家目录存储（~/.universe/llm_cache/）
 - 异步安全的读写操作
 """
 
