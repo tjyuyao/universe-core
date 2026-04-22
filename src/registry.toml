@@ -1,0 +1,13 @@
+# Universe Module Registry
+# Maps short module names to git repositories.
+# Used by `universe module add <name>` to resolve git URLs.
+#
+# Format:
+#   [module-name]
+#   git = "https://github.com/..."
+#   description = "Short description"
+
+# Example:
+# [chat]
+# git = "https://github.com/you/universe-module-chat"
+# description = "Chat and messaging: Inbox, SendMessageAction"
