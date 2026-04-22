@@ -10,7 +10,6 @@ def main() -> None:
     all_orders["core"] = DependencyOrder("core", [
         "meta",
         "config",
-        "translate",
         "timing",
         "llm_client",
         "object_",
