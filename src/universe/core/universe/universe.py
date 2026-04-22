@@ -1,3 +1,4 @@
+import json
 from ..object_ import Serializable
 from .world import World
 
@@ -18,3 +19,12 @@ class Universe(Serializable):
 
     def add_world(self, world_name: str, world: World):
         self.register_object(world_name, world)
+
+    def save(self, filename: str):
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(self.state_dict(), f, ensure_ascii=False, indent=4)
+
+    def load(self, filename: str):
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            self.load_state_dict(data)
