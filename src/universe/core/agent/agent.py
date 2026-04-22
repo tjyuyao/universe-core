@@ -268,14 +268,14 @@ class SwitchMindsetToParams(Params):
 
 class SwitchMindsetToAction(Action[Agent, SwitchMindsetToParams]):
     name = "switch_mindset_to"
-    description = "切换思维模式"
+    description = "切换到其它思维模式对应的状态和行为空间，必须作为当前轮的最后一次工具调用，其后所有工具调用将被忽略"
     
     async def execute(self, obj, params, actor, world):
         assert isinstance(obj, Agent)
         try:
             obj.attention.get_current_role().get_mindset(params.mindset_name)
         except KeyError:
-            return TimedStatus(duration=0.1, status=ActionExecutionStatus.FAIL)
+            return TimedStatus(duration=0.1, status=ActionExecutionStatus.FAIL, terminal=True)
         obj.attention.current_mindset = params.mindset_name
-        return TimedStatus(duration=5.0, status=ActionExecutionStatus.SUCCESS)
+        return TimedStatus(duration=5.0, status=ActionExecutionStatus.SUCCESS, terminal=True)
         

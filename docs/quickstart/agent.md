@@ -111,6 +111,29 @@ agent.attention.current_mindset = "patrol"
 
 This enables dynamic behavior changes without creating new Agent instances.
 
+### SwitchMindsetToAction
+
+Agents have a built-in action `switch_mindset_to` that allows the LLM to switch mindsets autonomously:
+
+```python
+from universe.core.agent import SwitchMindsetToAction
+
+Agent("alice", actions=[SwitchMindsetToAction()])
+
+# self-channel:
+Channel(cognitive_target="self", target_id="alice", allowed_actions=["switch_mindset_to"])
+
+# The LLM can call: switch_mindset_to(mindset_name="combat")
+# This switches to the "combat" mindset within the current role
+```
+
+Key characteristics:
+
+- **Dynamic enum**: The `mindset_name` parameter shows only available mindsets in the current role
+- **Must be last**: Should be the final tool call in a turn (subsequent calls are ignored)
+- **5 second duration**: Switching mindset consumes 5 logical seconds
+- **Fail on invalid**: Returns FAIL status if the mindset doesn't exist
+
 ## Channels
 
 A **Channel** connects an Agent to a target Object. It defines:

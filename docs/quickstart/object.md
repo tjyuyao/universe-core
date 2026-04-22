@@ -112,37 +112,6 @@ class Door(Object):
         self.is_locked = True
 ```
 
-## Dynamic Parameter Schema
-
-Override `param_json_schema()` to generate dynamic schemas based on channel or world state:
-
-```python
-class SelectParams(Params):
-    @classmethod
-    def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
-        # Dynamic options based on world state
-        target = world.objects[channel.target_id]
-        options = target.available_items
-        
-        return {
-            "type": "object",
-            "properties": {
-                "item": {
-                    "type": "string",
-                    "enum": options,
-                    "description": f"Available items: {', '.join(options)}"
-                }
-            },
-            "required": ["item"]
-        }
-
-class SelectAction(Action["Container", SelectParams]):
-    name = "take_item"
-    description = "Take an item from the container."
-```
-
-Common use cases: context-aware enums, conditional required fields, dynamic descriptions.
-
 ## Overriding `observe()`
 
 By default, `observe()` serializes the entire `state_dict()` as HJSON. Override it to control what Agents perceive:
@@ -183,6 +152,37 @@ class Candle(Object):
         # Always call super to process the activity queue
         await super().transit(world)
 ```
+
+## Dynamic Parameter Schema
+
+Override `param_json_schema()` to generate dynamic schemas based on channel or world state:
+
+```python
+class SelectParams(Params):
+    @classmethod
+    def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
+        # Dynamic options based on world state
+        target = world.objects[channel.target_id]
+        options = target.available_items
+        
+        return {
+            "type": "object",
+            "properties": {
+                "item": {
+                    "type": "string",
+                    "enum": options,
+                    "description": f"Available items: {', '.join(options)}"
+                }
+            },
+            "required": ["item"]
+        }
+
+class SelectAction(Action["Container", SelectParams]):
+    name = "take_item"
+    description = "Take an item from the container."
+```
+
+Common use cases: context-aware enums, conditional required fields, dynamic descriptions.
 
 ## Nesting Objects
 

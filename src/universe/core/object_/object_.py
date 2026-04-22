@@ -64,6 +64,7 @@ class ActionExecutionStatus(str, Enum):
 class TimedStatus(BaseModel):
     duration: float
     status: ActionExecutionStatus
+    terminal: bool = False  # 是否为终端动作，即是否为当前轮的最后一次工具调用
 
 
 class ActionExecutionContext(BaseModel):
@@ -129,6 +130,12 @@ class Activity(BaseModel):
             context.duration = result.duration
             # Set the status of the current context. (previous None)
             context.status = result.status
+            # Return Case 4: Action is terminal, fail all subsequent contexts, so done (True).
+            if result.terminal:
+                for remaining in self.action_contexts.values():
+                    if not remaining.is_finished():
+                        remaining.status = ActionExecutionStatus.FAIL
+                return True
             # Return Case 2: Action not finished yet, so not done (False).
             if not context.is_finished_at(world.time):
                 return False
