@@ -1,8 +1,9 @@
 import warnings
 import json
+from uuid import uuid4
 from typing import TYPE_CHECKING
-from ..object_ import Object, Action, Channel, ActionExecutionPackage, State
-from ..llm_client import LLMClient, LLMResult, estimate_tokens, BudgetWarning
+from ..object_ import Object, Action, Channel, Activity, State, ActionExecutionContext
+from ..llm_client import LLMClient, LLMResult, estimate_tokens, BudgetWarning, ToolCall
 from ..timing import TimedStr
 
 from .soul import Soul
@@ -23,7 +24,6 @@ class Agent(Object):
     DEFAULT_READ_SPEED_GAIN: float = 1.0
     DEFAULT_THINK_SPEED_GAIN: float = 1.0
 
-    _busy_until: State[float]
     read_speed_gain: State[float]
     think_speed_gain: State[float]
     attention: State[Attention]
@@ -42,22 +42,11 @@ class Agent(Object):
         self.read_speed_gain = read_speed_gain or self.DEFAULT_READ_SPEED_GAIN
         self.think_speed_gain = think_speed_gain or self.DEFAULT_THINK_SPEED_GAIN
 
-        self._busy_until = 0.0
         self.attention = Attention()
 
     @property
     def agent_id(self):
         return self.object_id
-
-    @property
-    def busy_until(self) -> float:
-        return self._busy_until
-
-    def is_busy_at(self, time: float) -> bool:
-        return self._busy_until > time
-
-    def sync_world_time(self, world: World) -> None:
-        self._busy_until = world.time
 
     def append_busy_time(self, duration: float) -> None:
         self._busy_until += duration
@@ -146,19 +135,19 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
         return new_def
 
-    def _parse_response(self, response: LLMResult, world: World) -> dict[str, list[dict]]:
+    def _parse_response(self, response: LLMResult, world: World) -> dict[str, list[ToolCall]]:
         """解析 LLM 响应，提取工具调用"""
 
-        cog_tar_tool_calls: dict[str, list[dict]] = {}  # cognitive_target -> list[tool_call]
+        cog_tar_tool_calls: dict[str, list[ToolCall]] = {}  # cognitive_target -> list[tool_call]
         all_channels = self.attention.get_current_channels()
 
         for tool_call in response.tool_calls:
-            arguments:dict|str = tool_call["function"]["arguments"]
+            arguments:dict|str = tool_call["arguments"]
             if isinstance(arguments, str):
                 arguments = json.loads(arguments)
             assert isinstance(arguments, dict)
 
-            action_name = tool_call["function"]["name"]
+            action_name = tool_call["name"]
 
             # 查找支持该 action 的所有 Channel
             supporting_channels = [
@@ -182,23 +171,33 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
         return cog_tar_tool_calls
 
-    async def _react(
+    async def react(
         self,
         world: World,
-        ) -> list[ActionExecutionPackage]:
+        ) -> None:
         """推理和决策阶段（LLM Call）
         """
 
-        self.sync_world_time(world)
+        # 0. 工具集与Agent自身状态转移
+        for channel in self.attention.get_current_channels().values():
+            target = world.objects[channel.target_id]
+            assert isinstance(target, Object)
+            await target.transit(world)
+            self._busy_until = max(self._busy_until, target._busy_until)
 
-        # 1. 构建 LLM 调用参数
+        if self.is_busy_at(world.time):
+            return
+
+        await self.transit(world)
+
+        # 1. 构建 LLM 调用参数 (Observe)
         model_name = self.attention.get_current_model_name()
         system_prompt = self._build_system_prompt(world)
-        user_prompt = await self._build_user_prompt(world)
+        user_prompt = await self._build_user_prompt(world)  #  call observe()
         tools = self._build_tools(world)
         self.append_busy_time(user_prompt.duration)
 
-        # 2. 调用 LLM
+        # 2. 调用 LLM (Think)
         response: LLMResult = await _llm_client.complete(
             model=model_name,
             system_prompt=system_prompt,
@@ -208,20 +207,21 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         )
         self.append_busy_time(response.duration)
 
-        # 3. 解析 LLM 响应
-        actions = []
+        # 3. 解析 LLM 响应 (Act)
         cog_tar_tool_calls = self._parse_response(response, world)
         all_channels = self.attention.get_current_channels()
         for cognitive_target, tool_calls in cog_tar_tool_calls.items():
-            actions.append(ActionExecutionPackage(
+            action_contexts = {
+                str(uuid4()) : ActionExecutionContext(tool_call=tc) for tc in tool_calls
+            }
+            activity = Activity(
                 actor_id=self.agent_id,
                 channel=all_channels[cognitive_target],
-                action_calls=tool_calls,
-                action_results={},
                 action_invoke_time=self._busy_until,
-            ))
-
-        return actions
+                action_contexts=action_contexts,
+            )
+            target = world.objects[activity.channel.target_id]
+            await target.act(activity)
 
     def add_soul(self, soul: Soul):
         self.attention.add_soul(soul)
@@ -249,10 +249,3 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
     def remove_mindset(self, soul_name:str, role_name:str, name: str) -> Mindset:
         return self.attention.get_soul(soul_name).get_role(role_name).remove_mindset(name)
-
-    async def active(self, world: World) -> list[ActionExecutionPackage]:
-        if self.is_busy_at(world.time):
-            return []
-
-        actions = await self._react(world)
-        return actions

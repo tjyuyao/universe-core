@@ -1,4 +1,4 @@
-from .llm_client import LLMClient, LLMResult
+from .llm_client import LLMClient, LLMResult, ToolCall
 from .budget import estimate_tokens, BudgetWarning
 
 
@@ -8,4 +8,5 @@ __all__ = [
     "estimate_tokens",
     "BudgetWarning",
     "LLMResult",
+    "ToolCall",
 ]

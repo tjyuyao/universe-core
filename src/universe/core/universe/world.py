@@ -1,7 +1,8 @@
 import time
 
 from typing import cast
-from ..object_ import Serializable, Object, ActionExecutionPackage
+from ..timing import TEPS
+from ..object_ import Serializable, Object, Activity
 from ..agent import Agent
 
 
@@ -40,28 +41,15 @@ class World(Serializable):
     async def step(self) -> None:
         """世界步进（自适应步长）"""
 
-        self._time += 1e-3
+        self._time += TEPS
 
-        # 主动阶段
-        router: dict[str, list[ActionExecutionPackage]] = {}
-        """target_id -> packages"""
-        for obj in self.objects.values():
-            assert isinstance(obj, Object)
-            active_packages = await obj.active(self)
-            for pkg in active_packages:
-                router.setdefault(pkg.channel.target_id, []).append(pkg)
-
-        # 被动阶段
-        for obj in self.objects.values():
-            object_packages = await obj.passive(router.get(obj.object_id, []), self)
-            for pkg in object_packages:
-                actor = self.objects[pkg.actor_id]
-                assert isinstance(actor, Agent)
-                actor.append_busy_time(pkg.get_action_duration())
+        for agent in self.agents.values():
+            await agent.react(self)
 
         # 更新时间
         busy_times = []
         for obj in self.objects.values():
             if isinstance(obj, Agent):
                 busy_times.append(obj.busy_until)
-        self._time = min(busy_times)
+        if busy_times:
+            self._time = min(busy_times)

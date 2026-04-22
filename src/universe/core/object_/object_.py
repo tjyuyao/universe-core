@@ -1,10 +1,11 @@
 import hjson  # type: ignore
 from typing import TYPE_CHECKING, Type, Generic, TypeVar, cast
 from pydantic import BaseModel, Field
+from enum import Enum
 
 from ..meta.generics_ import GenericsMeta
 from ..timing import TimedStr
-from ..llm_client import estimate_tokens
+from ..llm_client import estimate_tokens, ToolCall
 from .serializable import Serializable
 from .state import State
 
@@ -46,22 +47,100 @@ class Action(Generic[O, P], metaclass=GenericsMeta):
             },
         }
 
-    def execute(self, obj: O, params: P, actor: Agent, world: World) -> TimedStr:
-        raise NotImplementedError("Subclasses of Action must implement execute() or arbitrate()")
+    async def execute(self, obj: O, params: P, actor: Agent, world: World) -> TimedStatus:
+        raise NotImplementedError("Subclasses of Action must implement execute()")
 
 
-class ActionExecutionPackage(BaseModel):
+class ActionExecutionStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAIL = "fail"
+
+
+class TimedStatus(BaseModel):
+    duration: float
+    status: ActionExecutionStatus
+
+
+class ActionExecutionContext(BaseModel):
+    """动作执行上下文"""
+    tool_call: ToolCall              # LLM 工具调用请求，包含函数名、参数等
+    start_time: float | None = None  # 动作开始时间，None 表示未开始
+    duration: float = 0              # 动作执行时间，单位：逻辑秒
+    status: ActionExecutionStatus = ActionExecutionStatus.PENDING  # 动作调用实时状态
+
+    @property
+    def end_time(self) -> float:
+        assert self.start_time is not None
+        return self.start_time + self.duration
+
+    def is_finished(self) -> bool:
+        return self.status in [ActionExecutionStatus.SUCCESS, ActionExecutionStatus.FAIL]
+
+    def is_finished_at(self, time: float) -> bool:
+        if self.start_time is None:
+            return False
+        return time - self.start_time >= self.duration
+
+    def set_running(self) -> None:
+        self.status = ActionExecutionStatus.RUNNING
+
+
+class Activity(BaseModel):
     """来自同一执行者和目标者的动作请求包"""
     actor_id: str                           # 动作发送者 ID
     channel: Channel                        # 动作通道定义
-    action_calls: list[dict]                # 实际要执行的动作及参数列表，来自 LLM 的 tool_calls 列表
-    action_invoke_time: float               # 动作开始时刻
-    action_duration: float | None = None    # 动作执行时间间隔，None 表示尚未执行完成，Actor 处于 busy 状态
-    action_results: dict[str, str] = Field(default_factory=dict)  # 动作调用结果 tool_call_id -> result
+    action_invoke_time: float               # 动作包发出时刻
+    action_contexts: dict[str, ActionExecutionContext] = Field(default_factory=dict)  # 动作执行上下文， uuid -> context
 
-    def get_action_duration(self) -> float:
-        assert self.action_duration is not None, "Action duration is not set"
-        return self.action_duration
+    async def transit(self, obj: Object, world: World) -> bool:
+        """执行到当前时间点
+        
+        Returns:
+            done(bool): 到世界时间为止，是否足以完成所有动作
+        """
+        # Return Case 1: Action scheduled in the future, i.e. not even started, so not done (False).
+        if world.time < self.action_invoke_time:
+            return False
+        
+        actor = world.agents[self.actor_id]
+        assert isinstance(actor, Agent)
+        
+        # Now execute the actions that are not finished yet until the current time.
+        busy_until = self.action_invoke_time
+        for context in self.action_contexts.values():
+            # Skip already finished context.
+            if context.is_finished():
+                # Update busy_until to the previous context's end time.
+                busy_until = context.end_time
+                continue
+            # Mark the start time of the current context. (consume busy_until)
+            context.start_time = busy_until
+            # Set the status to running.
+            context.set_running()
+            # Execute the action.
+            action, params = obj.tool_call_as_action(context.tool_call)
+            result = await action.execute(obj, params, actor, world)
+            # Update the duration of the current context. (previous None)
+            context.duration = result.duration
+            # Set the status of the current context. (previous None)
+            context.status = result.status
+            # Return Case 2: Action not finished yet, so not done (False).
+            if not context.is_finished_at(world.time):
+                return False
+        # Return Case 3: All actions are finished, so done (True).
+        return True
+
+    @property
+    def busy_until(self) -> float:
+        busy_until = self.action_invoke_time
+        for context in self.action_contexts.values():
+            if context.is_finished():
+                busy_until = context.end_time
+                continue
+            break
+        return busy_until
 
 
 class Channel(BaseModel):
@@ -91,28 +170,32 @@ class Object(Serializable):
     """对象基类"""
 
     DEFAULT_READ_SPEED: float = 10
-    DEFAULT_CAPACITY: int = 1        # 默认容量为1，即只能同时处理一个动作
 
-    object_id: State[str]            # 对象 ID
-    actions: dict[str, Action]       # 支持的动作字典，键为动作名称，值为动作对象
-    read_speed: State[float]         # 观察对象状态的速度，单位为 tokens/second
-    capacity: State[int]             # 客体对象最大动作并发数，0 表示无限并发
+    object_id: State[str]              # 对象 ID
+    actions: dict[str, Action]         # 支持的动作字典，键为动作名称，值为动作对象
+    read_speed: State[float]           # 观察对象状态的速度，单位为 tokens/second
+    activities: State[list[Activity]]  # 等待执行的动作请求包
+    _busy_until: State[float]          # 最后一次执行动作的结束时间
 
     def __init__(self, object_id: str, *,
                  actions: list[Action] | None = None,
                  read_speed: float | None = None,
-                 capacity: int | None = None,
                 ):
         super().__init__()
         self.object_id = object_id
         self.actions = {action.name: action for action in (actions or [])}
         self.read_speed = read_speed or self.DEFAULT_READ_SPEED
-        self.capacity = capacity or self.DEFAULT_CAPACITY
+        self.activities = []
+        self._busy_until = 0.0
 
     @property
     def objects(self) -> dict[str, Object]:
         """当前对象所持有的子对象字典，键为子对象 ID，值为子对象"""
         return cast(dict[str, Object], self._objects)
+
+    @property
+    def busy_until(self) -> float:
+        return self._busy_until
 
     def _observe_duration(self, content: str, world: World | None = None, observer_id: str | None = None) -> float:
         """计算观察对象状态的持续时间"""
@@ -130,66 +213,65 @@ class Object(Serializable):
         assert self.read_speed > 0, f"Object {self.object_id}'s read speed must be greater than 0"
         return token_count / (self.read_speed * read_speed_gain)
 
-    def _validate_action_packages(self, packages: list[ActionExecutionPackage]):
+    def _validate_action_package(self, package: Activity):
         """验证动作请求包满足约束"""
 
         # 检查调用工具名称是否在通道允许列表中
-        for package in packages:
-            if package.channel.allowed_actions is None:
-                continue
-            for tool_call in package.action_calls:
-                action_name = tool_call["function"]["name"]
+        if package.channel.allowed_actions is not None:
+            for context in package.action_contexts.values():
+                action_name = context.tool_call["name"]
                 if action_name not in package.channel.allowed_actions:
                     raise ValueError(f"Action {action_name} not allowed in channel {package.channel.allowed_actions}")
 
         # 检查 target_id 与 当前对象 object_id 是否一致
-        for package in packages:
-            if package.channel.target_id != self.object_id:
-                raise ValueError(f"Target ID {package.channel.target_id} does not match object ID {self.object_id}")
+        if package.channel.target_id != self.object_id:
+            raise ValueError(f"Target ID {package.channel.target_id} does not match object ID {self.object_id}")
 
-    async def _execute_action(self, tool_call: dict, actor: Agent, world: World) -> TimedStr:
-        """执行工具调用"""
-        action_name = tool_call["function"]["name"]
-        arguments = tool_call["function"]["arguments"]
+    def is_busy_at(self, time: float) -> bool:
+        return self._busy_until > time
+
+    def tool_call_as_action(self, tool_call: ToolCall) -> tuple[Action, Params]:
+        action_name = tool_call["name"]
+        arguments = tool_call["arguments"]
         action = self.actions.get(action_name)
         if action is None:
-            raise ValueError(f"Action {action_name} not found in object.actions")
+            raise ValueError(f"Action {action_name} not found in Object {self.object_id}")
         params = action.GetParams(arguments)
-        result = action.execute(self, params, actor, world)
-        return result
+        return action, params
+    
+    def enqueue_activity(self, activity: Activity) -> None:
+        """添加动作请求包到队列"""
+        self._validate_action_package(activity)
+        # Insert sorted by action_invoke_time
+        for search_index, search_activity in enumerate(self.activities):
+            if search_activity.action_invoke_time > activity.action_invoke_time:
+                self.activities.insert(search_index, activity)
+                break
+        else:
+            self.activities.append(activity)
 
-    async def active(self, world: World) -> list[ActionExecutionPackage]:
-        """主动阶段（默认实现为空，子类可重写）
+    async def transit(self, world: World) -> None:
+        """对象状态转移"""
+        if self.activities:
+            busy_until = self.activities[0].busy_until
+            while self.activities:
+                self.activities[0].action_invoke_time = busy_until
+                done = await self.activities[0].transit(self, world)
+                busy_until = self.activities[0].busy_until
+                if done:
+                    # Action finished, so pop it from the list. (drop it)
+                    self.activities.pop(0)
+                else:
+                    # Action timeout, leave for next time.
+                    break
+            self._busy_until = busy_until
 
-        职责一：模拟状态随时间的自然演化（更新自身状态到当前世界时间，无需返回动作请求）
-            例如：
-            - 无控制状态转移
-            - 惯性运动更新位置
-            - 随着年龄衰老
-            - 资源自然消耗
-            - 过期数据清理
-
-        职责二：通过返回值向其他对象发送动作请求（参考 Agent 类的实现）
-        """
-        assert isinstance(world, World)
-        return []
-
-    async def passive(self, packages: list[ActionExecutionPackage], world: World) -> list[ActionExecutionPackage]:
-        """被动阶段 - 接收外部动作影响"""
-        self._validate_action_packages(packages)
-        for package in packages:
-            action_duration = 0.0
-            for tool_call in package.action_calls:
-                actor = world.objects[package.actor_id]
-                assert isinstance(actor, Agent)
-                action_result = await self._execute_action(tool_call, actor, world)
-                action_duration += action_result.duration
-                package.action_results[tool_call["id"]] = action_result.content or ""
-            package.action_duration = action_duration
-        return packages
-
-    async def observe(self, *, channel: Channel | None = None, world: World | None = None, observer_id: str | None = None) -> TimedStr:
+    async def observe(self, *, channel: Channel | None = None, world: World, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知与效应马尔可夫毯均可在此实现）"""
         content = hjson.dumps(self.state_dict(), ensure_ascii=False)
         duration = self._observe_duration(content, world, observer_id)
         return TimedStr(duration=duration, content=content)
+
+    async def act(self, activity: Activity) -> None:
+        """执行动作请求包"""
+        self.enqueue_activity(activity)

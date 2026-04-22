@@ -12,3 +12,6 @@ from pydantic import BaseModel, Field
 class TimedStr(BaseModel):
     duration: float = Field(description="动作执行时间")
     content: str | None = Field(default=None, description="动作执行结果")
+
+
+TEPS = 1e-3

@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Any
+from typing import Any, TypedDict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +20,12 @@ from .validator import ToolArgumentsValidator
 from .budget import estimate_tokens
 
 
+class ToolCall(TypedDict):
+    """工具调用请求"""
+    name: str
+    arguments: dict
+
+
 @dataclass
 class LLMResult:
     """LLM 生成的结果
@@ -31,7 +37,7 @@ class LLMResult:
         duration: 调用持续逻辑时间
     """
     thought: str
-    tool_calls: list[dict]
+    tool_calls: list[ToolCall]
     log_file: Path | None = None
     duration: float = 0.0
 
@@ -150,22 +156,22 @@ class LLMClient(metaclass=SingletonMeta):
 
         # 解析响应
         message: dict[str, Any] = response_data["choices"][0]["message"]
-        tool_calls = message.get("tool_calls") or []
+        tool_calls: list[ToolCall] = [tc['function'] for tc in message.get("tool_calls") or []]
 
         # 校验与修复工具调用参数
         if tools:
             # 验证并修复每个 tool_call 的参数
             for tool_call in tool_calls:
-                arguments = tool_call["function"]["arguments"]
+                arguments = tool_call["arguments"]
                 if isinstance(arguments, str):
                     arguments = json.loads(arguments)
 
-                tool_name = tool_call["function"]["name"]
+                tool_name = tool_call["name"]
                 tool_schema = self._find_tool_schema(tools, tool_name)
                 if tool_schema:
                     arguments = self._validator.validate(arguments, tool_schema)
 
-                tool_call["function"]["arguments"] = arguments
+                tool_call["arguments"] = arguments
 
         thought = message.get("content", "")
         think_speed = self.BASE_THINK_SPEED * think_speed_gain
