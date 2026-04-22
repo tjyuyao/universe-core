@@ -45,8 +45,8 @@ class LLMResult:
 class LLMClient(metaclass=SingletonMeta):
 
     CACHE_MAX_SIZE: int = 128
-    CACHE_DIR: Path | str = "~/.universe/llm_cache"
-    LOG_DIR: Path | str = "~/.universe/llm_logs"
+    CACHE_DIR: Path | str = ".artifacts/llm_cache"
+    LOG_DIR: Path | str = ".artifacts/llm_logs"
     MAX_LOG_SESSIONS: int = 10
     BASE_THINK_SPEED: int = 15
 

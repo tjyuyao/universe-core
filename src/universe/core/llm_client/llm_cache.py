@@ -3,7 +3,7 @@
 提供基于文件系统的 LLM 响应缓存，支持：
 - SHA256 哈希键生成
 - LRU 淘汰策略（默认 128 条）
-- 用户家目录存储（~/.universe/llm_cache/）
+- 工作目录存储（.artifacts/llm_cache/）
 - 异步安全的读写操作
 """
 
@@ -87,7 +87,7 @@ class LLMCache:
 
         Args:
             max_size: 最大缓存条目数，默认 128
-            cache_dir: 缓存目录，默认 ~/.universe/llm_cache/
+            cache_dir: 缓存目录，默认 .artifacts/llm_cache/
         """
         self._max_size = max_size
         self._cache_dir = cache_dir or self._get_default_cache_dir()
