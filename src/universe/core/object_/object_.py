@@ -1,5 +1,5 @@
 import hjson  # type: ignore
-from typing import TYPE_CHECKING, Type, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Type, Generic, TypeVar, cast, Any
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -20,7 +20,10 @@ if TYPE_CHECKING:
 
 
 class Params(BaseModel):
-    pass
+    
+    @classmethod
+    def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
+        return cls.model_json_schema()
 
 
 class Action(Generic[O, P], metaclass=GenericsMeta):
@@ -36,14 +39,14 @@ class Action(Generic[O, P], metaclass=GenericsMeta):
     def GetParams(cls, arguments: dict) -> P:
         return cls.GetParamsType().model_validate(arguments)
 
-    def get_llm_tool_definition(self) -> dict:
+    def get_llm_tool_definition(self, channel: Channel, world: World) -> dict:
         """获取 OpenAI function calling 格式的工具定义"""
         return {
             "type": "function",
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.GetParamsType().model_json_schema(),
+                "parameters": self.GetParamsType().param_json_schema(channel, world),
             },
         }
 

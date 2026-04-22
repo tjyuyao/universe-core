@@ -1,8 +1,9 @@
 import warnings
 import json
 from uuid import uuid4
-from typing import TYPE_CHECKING
-from ..object_ import Object, Action, Channel, Activity, State, ActionExecutionContext
+from typing import TYPE_CHECKING, Any
+
+from ..object_ import Object, Action, Channel, Activity, State, ActionExecutionContext, Params, ActionExecutionStatus, TimedStatus
 from ..llm_client import LLMClient, LLMResult, estimate_tokens, BudgetWarning, ToolCall
 from ..timing import TimedStr
 
@@ -103,8 +104,9 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
         # 生成工具定义
         for action_name, channels in action_groups.items():
-            action = channels[0].get_action(action_name, world)
-            base_tool = action.get_llm_tool_definition()
+            channel = channels[0]
+            action = channel.get_action(action_name, world)
+            base_tool = action.get_llm_tool_definition(channel, world)
 
             if len(channels) > 1:
                 target_names = [ch.cognitive_target for ch in channels]
@@ -249,3 +251,31 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
     def remove_mindset(self, soul_name:str, role_name:str, name: str) -> Mindset:
         return self.attention.get_soul(soul_name).get_role(role_name).remove_mindset(name)
+    
+
+class SwitchMindsetToParams(Params):
+    mindset_name: str
+
+    @classmethod
+    def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
+        schema = super().param_json_schema(channel, world)
+        agent = world.objects[channel.target_id]
+        assert isinstance(agent, Agent)
+        available_mindsets = list(agent.attention.get_current_role().mindsets.keys())
+        schema["properties"]["mindset_name"]["enum"] = available_mindsets
+        return schema
+
+
+class SwitchMindsetToAction(Action[Agent, SwitchMindsetToParams]):
+    name = "switch_mindset_to"
+    description = "切换思维模式"
+    
+    async def execute(self, obj, params, actor, world):
+        assert isinstance(obj, Agent)
+        try:
+            obj.attention.get_current_role().get_mindset(params.mindset_name)
+        except KeyError:
+            return TimedStatus(duration=0.1, status=ActionExecutionStatus.FAIL)
+        obj.attention.current_mindset = params.mindset_name
+        return TimedStatus(duration=5.0, status=ActionExecutionStatus.SUCCESS)
+        
