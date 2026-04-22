@@ -9,5 +9,5 @@
 
 # Example:
 # [chat]
-# git = "https://github.com/you/universe-module-chat"
+# git = "https://github.com/tjyuyao/universe-module-chat"
 # description = "Chat and messaging: Inbox, SendMessageAction"

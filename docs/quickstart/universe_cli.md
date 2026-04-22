@@ -52,6 +52,14 @@ universe-module-chat/
 
 **Critical**: the `universe_modules/` directory must NOT contain `__init__.py`. It is a Python [implicit namespace package](https://peps.python.org/pep-0420/) that allows multiple independently-installed modules to coexist under `universe_modules.*`.
 
+**Note**: you can use `universe module init` to automatically create a new module.
+
+```bash
+universe module init chat
+```
+
+This creates a new module `universe-module-chat` with a basic structure.
+
 ### pyproject.toml
 
 ```toml
@@ -65,7 +73,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-universe = { git = "https://github.com/you/universe" }
+universe = { git = "https://github.com/tjyuyao/universe" }
 
 [build-system]
 requires = ["hatchling"]
@@ -143,9 +151,9 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-universe = { git = "https://github.com/you/universe" }
-universe-module-chat = { git = "https://github.com/you/universe-module-chat" }
-universe-module-spatial = { git = "https://github.com/you/universe-module-spatial", tag = "v0.2.0" }
+universe = { git = "https://github.com/tjyuyao/universe" }
+universe-module-chat = { git = "https://github.com/tjyuyao/universe-module-chat" }
+universe-module-spatial = { git = "https://github.com/tjyuyao/universe-module-spatial", tag = "v0.2.0" }
 ```
 
 ### Remove
@@ -174,7 +182,7 @@ The CLI is a thin wrapper (~50 lines). It does NOT implement dependency resoluti
 ```
 universe module add chat@v0.2.0
     ↓ registry lookup
-uv add "universe-module-chat>=0.2.0" --source "git+https://github.com/you/universe-module-chat@v0.2.0"
+uv add "universe-module-chat>=0.2.0" --source "git+https://github.com/tjyuyao/universe-module-chat@v0.2.0"
 ```
 
 ## Registry
@@ -186,15 +194,15 @@ The registry is a TOML file that maps module short names to their git URLs. It i
 # Maps short names to git repositories.
 
 [chat]
-git = "https://github.com/you/universe-module-chat"
+git = "https://github.com/tjyuyao/universe-module-chat"
 description = "Chat and messaging: Inbox, SendMessageAction"
 
 [spatial]
-git = "https://github.com/you/universe-module-spatial"
+git = "https://github.com/tjyuyao/universe-module-spatial"
 description = "Spatial world: Room, Door, MoveAction"
 
 [inventory]
-git = "https://github.com/you/universe-module-inventory"
+git = "https://github.com/tjyuyao/universe-module-inventory"
 description = "Items and containers: Inventory, Item, TradeAction"
 ```
 

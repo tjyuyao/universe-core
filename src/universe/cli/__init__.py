@@ -7,6 +7,7 @@ from universe.cli.module import (
     cmd_module_remove,
     cmd_module_list,
     cmd_module_search,
+    cmd_module_init,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "cmd_module_remove",
     "cmd_module_list",
     "cmd_module_search",
+    "cmd_module_init",
 ]

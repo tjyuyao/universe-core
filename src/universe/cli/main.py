@@ -48,6 +48,21 @@ def run_cli() -> None:
         help="Search query (optional)"
     )
 
+    # module init
+    init_parser = module_subparsers.add_parser(
+        "init",
+        help="Initialize a new universe module"
+    )
+    init_parser.add_argument(
+        "name",
+        help="Module name (e.g., 'chat', 'inventory')"
+    )
+    init_parser.add_argument(
+        "--description",
+        help="Module description",
+        default=None
+    )
+
     args = parser.parse_args()
 
     if args.command == "module":
