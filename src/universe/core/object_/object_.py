@@ -7,7 +7,7 @@ from ..meta.generics_ import GenericsMeta
 from ..timing import TimedStr
 from ..llm_client import estimate_tokens, ToolCall
 from .serializable import Serializable
-from .state import State
+from .state import State, PrivateState
 
 
 O = TypeVar("O", bound="Object")
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class Params(BaseModel):
-    
+
     @classmethod
     def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
         return cls.model_json_schema()
@@ -181,11 +181,11 @@ class Object(Serializable):
 
     DEFAULT_READ_SPEED: float = 10
 
-    object_id: State[str]              # 对象 ID
-    actions: dict[str, Action]         # 支持的动作字典，键为动作名称，值为动作对象
-    read_speed: State[float]           # 观察对象状态的速度，单位为 tokens/second
-    activities: State[list[Activity]]  # 等待执行的动作请求包
-    _busy_until: State[float]          # 最后一次执行动作的结束时间
+    object_id: State[str]                    # 对象 ID
+    actions: dict[str, Action]               # 支持的动作字典，键为动作名称，值为动作对象
+    read_speed: PrivateState[float]          # 观察对象状态的速度，单位为 tokens/second
+    activities: PrivateState[list[Activity]] # 等待执行的动作请求包
+    _busy_until: PrivateState[float]         # 最后一次执行动作的结束时间
 
     def __init__(self, object_id: str, *,
                  actions: list[Action] | None = None,
@@ -278,7 +278,7 @@ class Object(Serializable):
 
     async def observe(self, *, channel: Channel | None = None, world: World, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知与效应马尔可夫毯均可在此实现）"""
-        content = hjson.dumps(self.state_dict(), ensure_ascii=False)
+        content = hjson.dumps(self.observable_state_dict(), ensure_ascii=False)
         duration = self._observe_duration(content, world, observer_id)
         return TimedStr(duration=duration, content=content)
 

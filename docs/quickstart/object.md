@@ -40,7 +40,7 @@ class ToggleAction(Action[Light, Params]):
 
 ## Defining State
 
-Use `State[T]` type annotations to mark fields as serializable state. These fields are automatically included in `state_dict()` (used by `observe()` to build the LLM context).
+Use `State[T]` type annotations to mark fields as serializable and observable state. These fields are automatically included in `state_dict()` (for persistence) and in `observable_state_dict()` (used by `observe()` to build the LLM context). For fields that should be saved but hidden from observation, use `PrivateState[T]` instead.
 
 ```python
 from universe.core.object_ import Object, State
@@ -59,7 +59,39 @@ class Door(Object):
 
 Supported state types: `int`, `float`, `str`, `bool`, `None`, `list`, `tuple`, `dict`, and Pydantic `BaseModel` subclasses. All state values must be JSON-serializable.
 
-Fields **not** annotated with `State[T]` (e.g. plain `dict`, local caches) are invisible to serialization and observation.
+Fields **not** annotated with `State[T]` or `PrivateState[T]` (e.g. plain `dict`, local caches) are invisible to serialization and observation.
+
+## Private State
+
+Use `PrivateState[T]` for fields that should be saved/loaded but hidden from observation. This is useful for internal bookkeeping that shouldn't be visible to other Agents:
+
+```python
+from universe.core.object_ import Object, State, PrivateState
+
+class Door(Object):
+    is_locked: State[bool]               # Others see this when observing
+    unlock_attempts: PrivateState[int]   # Tracked internally, hidden from observation
+    last_unlock_time: PrivateState[float]  # Internal timing state
+
+    def __init__(self, object_id: str):
+        super().__init__(object_id=object_id)
+        self.is_locked = True
+        self.unlock_attempts = 0
+        self.last_unlock_time = 0.0
+```
+
+**State method visibility:**
+
+| Method | `State[T]` | `PrivateState[T]` |
+|--------|------------|-------------------|
+| `state_dict()` | Included | Included |
+| `observable_state_dict()` | Included | **Excluded** |
+
+Use `PrivateState` for:
+- Internal counters, caches, and temporary state
+- Scheduling data (e.g., `_busy_until`, `activities`)
+- Speed multipliers and timing parameters
+- Full attention hierarchy (Soul → Role → Mindset)
 
 ## Defining Actions
 

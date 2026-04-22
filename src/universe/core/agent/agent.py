@@ -3,7 +3,7 @@ import json
 from uuid import uuid4
 from typing import TYPE_CHECKING, Any
 
-from ..object_ import Object, Action, Channel, Activity, State, ActionExecutionContext, Params, ActionExecutionStatus, TimedStatus
+from ..object_ import Object, Action, Channel, Activity, State, PrivateState, ActionExecutionContext, Params, ActionExecutionStatus, TimedStatus
 from ..llm_client import LLMClient, LLMResult, estimate_tokens, BudgetWarning, ToolCall
 from ..timing import TimedStr
 
@@ -25,9 +25,9 @@ class Agent(Object):
     DEFAULT_READ_SPEED_GAIN: float = 1.0
     DEFAULT_THINK_SPEED_GAIN: float = 1.0
 
-    read_speed_gain: State[float]
-    think_speed_gain: State[float]
-    attention: State[Attention]
+    read_speed_gain: PrivateState[float]
+    think_speed_gain: PrivateState[float]
+    attention: PrivateState[Attention]
 
     def __init__(self, agent_id: str, *,
                  actions: list[Action] | None = None,
@@ -251,7 +251,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
     def remove_mindset(self, soul_name:str, role_name:str, name: str) -> Mindset:
         return self.attention.get_soul(soul_name).get_role(role_name).remove_mindset(name)
-    
+
 
 class SwitchMindsetToParams(Params):
     mindset_name: str
@@ -269,7 +269,7 @@ class SwitchMindsetToParams(Params):
 class SwitchMindsetToAction(Action[Agent, SwitchMindsetToParams]):
     name = "switch_mindset_to"
     description = "切换到其它思维模式对应的状态和行为空间，必须作为当前轮的最后一次工具调用，其后所有工具调用将被忽略"
-    
+
     async def execute(self, obj, params, actor, world):
         assert isinstance(obj, Agent)
         try:
@@ -278,4 +278,4 @@ class SwitchMindsetToAction(Action[Agent, SwitchMindsetToParams]):
             return TimedStatus(duration=0.1, status=ActionExecutionStatus.FAIL, terminal=True)
         obj.attention.current_mindset = params.mindset_name
         return TimedStatus(duration=5.0, status=ActionExecutionStatus.SUCCESS, terminal=True)
-        
+

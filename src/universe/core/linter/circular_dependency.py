@@ -31,7 +31,6 @@ def main() -> None:
     all_orders["object_"] = DependencyOrder("core/object_", [
         "state",
         "serializable",
-        "appearance",
         "object_",
         "__init__",
         ])

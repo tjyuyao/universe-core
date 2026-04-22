@@ -4,7 +4,7 @@ from pydantic_core import PydanticSerializationError
 from pydantic import BaseModel
 from typing import Any, ClassVar, get_type_hints
 from ..translate import translate
-from .state import BaseState, is_state_annotation
+from .state import BaseState, is_state_annotation, is_private_state_annotation
 
 
 # Type alias for valid state value types
@@ -23,13 +23,19 @@ class Serializable:
     _state_fields_: ClassVar[set[str]] = set()
     """类级别的状态字段集合，通过 State[T] 注解自动收集"""
 
+    _private_state_fields_: ClassVar[set[str]] = set()
+    """类级别的私有状态字段集合，通过 PrivateState[T] 注解自动收集"""
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        # Collect field names with State[T] annotations
+        # Collect field names with State[T] and PrivateState[T] annotations
         try:
             hints = get_type_hints(cls, include_extras=True)
             cls._state_fields_ = {
                 name for name, hint in hints.items() if is_state_annotation(hint)
+            }
+            cls._private_state_fields_ = {
+                name for name, hint in hints.items() if is_private_state_annotation(hint)
             }
         except NameError:
             warnings.warn(
@@ -37,6 +43,7 @@ class Serializable:
                 UserWarning,
             )
             cls._state_fields_ = set()
+            cls._private_state_fields_ = set()
 
     def __init__(self):
         self._objects = {}
@@ -55,7 +62,7 @@ class Serializable:
 
         if isinstance(value, Serializable):
             self.register_object(name, value)
-        elif name in type(self)._state_fields_:
+        elif name in type(self)._state_fields_ or name in type(self)._private_state_fields_:
             self.register_state(name, value)
         else:
             super().__setattr__(name, value)
@@ -121,6 +128,21 @@ class Serializable:
 
         for name, value in self._objects.items():
             destination[name] = value.state_dict()
+        return destination
+
+    def observable_state_dict(self) -> dict[str, Any]:
+        """返回可观察的对象状态字典（排除 PrivateState 字段）"""
+        destination: dict[str, Any] = {}
+
+        # Only include non-private state fields
+        for name, state in self._states.items():
+            if name not in type(self)._private_state_fields_:
+                destination[name] = Serializable.serialize_state(state, name)
+
+        # Child objects remain visible (structural composition, not internal bookkeeping)
+        for name, value in self._objects.items():
+            destination[name] = value.observable_state_dict()
+
         return destination
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
