@@ -15,3 +15,5 @@ config.yml
 todo.md
 .coverage
 .artifacts/
+.trae/
+smoke.py

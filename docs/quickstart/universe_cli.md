@@ -2,7 +2,7 @@
 
 ## Overview
 
-Universe modules are reusable building blocks that extend the core framework. Each module is an independent Python package that depends on `universe` (the core) and can be shared across projects and domains.
+Universe modules are reusable building blocks that extend the core framework. Each module is an independent Python package that depends on `universe-core` (the core) and can be shared across projects and domains.
 
 The package management strategy has three layers:
 
@@ -21,7 +21,7 @@ git+https://github.com/.../...    ← git (source of truth)
 ## Architecture
 
 ```
-universe/                   (framework kernel — Object, Agent, World)
+universe-core/              (framework kernel — Object, Agent, World)
 universe-module-chat/       (reusable module — Inbox, SendMessageAction, ...)
 universe-module-spatial/    (reusable module — Room, Door, MoveAction, ...)
 app-game/                   (application — depends on universe + chat + spatial)
@@ -29,7 +29,7 @@ app-research/               (application — depends on universe + chat)
 ```
 
 Rules:
-- Modules depend on `universe`. Never the reverse.
+- Modules depend on `universe-core`. Never the reverse.
 - Modules do NOT depend on other modules by default (flat strategy).
 - If a module must depend on another module, declare it explicitly in its `pyproject.toml`.
 
@@ -69,11 +69,11 @@ version = "0.1.0"
 description = "Chat and messaging objects for Universe"
 requires-python = ">=3.14"
 dependencies = [
-    "universe>=0.1.0",
+    "universe-core>=0.1.0",
 ]
 
 [tool.uv.sources]
-universe = { git = "https://github.com/tjyuyao/universe" }
+universe-core = { git = "https://github.com/tjyuyao/universe-core" }
 
 [build-system]
 requires = ["hatchling"]
@@ -145,13 +145,13 @@ After `universe module add chat spatial`, the application's `pyproject.toml` loo
 [project]
 name = "my-game"
 dependencies = [
-    "universe>=0.1.0",
+    "universe-core>=0.1.0",
     "universe-module-chat>=0.1.0",
     "universe-module-spatial>=0.2.0",
 ]
 
 [tool.uv.sources]
-universe = { git = "https://github.com/tjyuyao/universe" }
+universe-core = { git = "https://github.com/tjyuyao/universe-core" }
 universe-module-chat = { git = "https://github.com/tjyuyao/universe-module-chat" }
 universe-module-spatial = { git = "https://github.com/tjyuyao/universe-module-spatial", tag = "v0.2.0" }
 ```
@@ -187,7 +187,7 @@ uv add "universe-module-chat>=0.2.0" --source "git+https://github.com/tjyuyao/un
 
 ## Registry
 
-The registry is a TOML file that maps module short names to their git URLs. It is bundled with `universe` at `src/registry.toml`:
+The registry is a TOML file that maps module short names to their git URLs. It is bundled with `universe-core` at `src/registry.toml`:
 
 ```toml
 # Universe Module Registry
@@ -206,7 +206,7 @@ git = "https://github.com/tjyuyao/universe-module-inventory"
 description = "Items and containers: Inventory, Item, TradeAction"
 ```
 
-To add a new module to the ecosystem, add an entry to this file in `universe`.
+To add a new module to the ecosystem, add an entry to this file in `universe-core`.
 
 ## Versioning
 

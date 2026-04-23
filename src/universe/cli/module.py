@@ -18,11 +18,11 @@ version = "0.1.0"
 description = "{description}"
 requires-python = ">=3.14"
 dependencies = [
-    "universe>=0.1.0",
+    "universe-core>=0.1.0",
 ]
 
 [tool.uv.sources]
-universe = {{ git = "https://github.com/tjyuyao/universe" }}
+universe-core = {{ git = "https://github.com/tjyuyao/universe-core" }}
 
 [build-system]
 requires = ["hatchling"]
@@ -93,6 +93,21 @@ def test_{module_name}_creation():
     assert obj.object_id == "test_id"
     assert obj.example_state == "initial"
 '''
+
+
+def _generate_gitignore() -> str:
+    """Generate .gitignore file content."""
+    return """# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+"""
 
 
 def cmd_module_init(name: str, description: str | None) -> None:
@@ -171,10 +186,15 @@ uv run pytest
 """
     (module_dir / "README.md").write_text(readme_content, encoding="utf-8")
 
+    # Create .gitignore
+    gitignore_content = _generate_gitignore()
+    (module_dir / ".gitignore").write_text(gitignore_content, encoding="utf-8")
+
     print(f"Created universe module '{name}' in '{module_dir}/'")
     print(f"")
     print(f"Structure:")
     print(f"  {module_dir}/")
+    print(f"  ├── .gitignore")
     print(f"  ├── pyproject.toml")
     print(f"  ├── README.md")
     print(f"  ├── src/")
