@@ -190,10 +190,32 @@ uv run pytest
     gitignore_content = _generate_gitignore()
     (module_dir / ".gitignore").write_text(gitignore_content, encoding="utf-8")
 
+    # Initialize git repository
+    try:
+        subprocess.run(
+            ["git", "init", "-q", str(module_dir)],
+            check=True,
+            capture_output=True
+        )
+        # Initial commit
+        subprocess.run(
+            ["git", "-C", str(module_dir), "add", "."],
+            check=True,
+            capture_output=True
+        )
+        subprocess.run(
+            ["git", "-C", str(module_dir), "commit", "-m", "Initial commit", "-q"],
+            check=True,
+            capture_output=True
+        )
+    except subprocess.CalledProcessError:
+        print(f"Warning: Failed to initialize git repository in '{module_dir}'")
+
     print(f"Created universe module '{name}' in '{module_dir}/'")
     print(f"")
     print(f"Structure:")
     print(f"  {module_dir}/")
+    print(f"  ├── .git/")
     print(f"  ├── .gitignore")
     print(f"  ├── pyproject.toml")
     print(f"  ├── README.md")
@@ -207,6 +229,9 @@ uv run pytest
     print(f"")
     print(f"Next steps:")
     print(f"  cd {module_dir}")
+    print(f"  # Connect to remote repository:")
+    print(f"  #   git remote add origin https://github.com/tjyuyao/{module_dir.name}.git")
+    print(f"  #   git push -u origin master")
     print(f"  uv sync")
     print(f"  # Edit src/universe_modules/{name}/ to implement your module")
 
