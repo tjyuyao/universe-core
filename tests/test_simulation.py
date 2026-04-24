@@ -106,6 +106,7 @@ async def test_world_step_with_real_llm():
         cognitive_target="room_light",
         target_id="light_001",
         allowed_actions=["toggle_light"],
+        budget=2000,
     )
 
     mindset = Mindset(
@@ -208,6 +209,7 @@ async def test_react_with_mocked_llm_response():
         cognitive_target="light_b",
         target_id="light_b",
         allowed_actions=["toggle_light"],
+        budget=2000,
     )
 
     mindset = Mindset(name="default", description="Test")
@@ -292,7 +294,7 @@ async def test_switch_mindset_action():
     assert result.status == ActionExecutionStatus.FAIL
 
     # Dynamic param schema lists available mindsets
-    ch = Channel(cognitive_target="self", target_id="switcher")
+    ch = Channel(cognitive_target="self", target_id="switcher", budget=2000)
     schema = SwitchMindsetToParams.param_json_schema(ch, world)
     assert set(schema["properties"]["mindset_name"]["enum"]) == {"calm", "alert"}
 

@@ -257,6 +257,7 @@ class TestActivityExecution:
             cognitive_target="tracker",
             target_id="tracker",
             allowed_actions=["track_action"],
+            budget=2000,
         )
 
         contexts = {
@@ -338,6 +339,7 @@ class TestActivityExecution:
             cognitive_target="tester",
             target_id="tester",
             allowed_actions=["normal_action", "terminal_action"],
+            budget=2000,
         )
 
         contexts = {
@@ -397,6 +399,7 @@ class TestActivityExecution:
             cognitive_target="tester",
             target_id="tester",
             allowed_actions=["slow_action"],
+            budget=2000,
         )
 
         # Initial busy_until should be 0

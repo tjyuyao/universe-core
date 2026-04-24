@@ -73,11 +73,10 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
             assert isinstance(target, Object)
             context = await target.observe(channel=channel, world=world, observer_id=self.agent_id)
             observe_duration += context.duration  # observe duration
-            if channel.budget is not None:
-                token_count = estimate_tokens(context, model=model_name)
-                if token_count > channel.budget:
-                    warnings.warn(BudgetWarning(token_count, channel.budget, channel.cognitive_target))
-                contexts[channel.cognitive_target] = context
+            token_count = estimate_tokens(context, model=model_name)
+            if token_count > channel.budget:
+                warnings.warn(BudgetWarning(token_count, channel.budget, channel.cognitive_target))
+            contexts[channel.cognitive_target] = context
         return TimedStr(
             duration=observe_duration,
             content=f"""你当前能意识和观察到的完整上下文信息如下，请阅读后决定工具调用行为：
@@ -89,16 +88,19 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         # 按 action 名称分组
         action_groups: dict[str, list[Channel]] = {}
         for channel in self.attention.get_current_channels().values():
-            if channel.allowed_actions is None:
-                continue
-
             # 过滤 busy 状态的独占式资源
             target = world.objects[channel.target_id]
             assert isinstance(target, Object)
             if target.is_preemptive() and target.is_busy_at(world.time):
                 continue
 
-            for action_name in channel.allowed_actions:
+            # allowed_actions 为 None 表示允许所有 actions
+            if channel.allowed_actions is None:
+                allowed = list(target.actions.keys())
+            else:
+                allowed = channel.allowed_actions
+
+            for action_name in allowed:
                 action_groups.setdefault(action_name, []).append(channel)
 
         # 检查 action 名称是否重复
@@ -219,13 +221,11 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
     async def react(
         self,
         world: World,
-        debug: bool = False,
         ) -> None:
         """推理和决策阶段（LLM Call）
 
         Args:
             world: World 实例
-            debug: 是否打印 LLM 日志到屏幕，默认为 False
         """
 
         # 0. 工具集与Agent自身状态转移
@@ -253,27 +253,24 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         self.append_busy_time(user_prompt.duration)
 
         # 2. 调用 LLM (Think)
-        response: LLMResult = await _llm_client.complete(
+        assert user_prompt.content is not None
+        model_name = _llm_client._config.get_llm_config(model_name).model
+        self.on_llm_prompt(
+            world=world,
             model=model_name,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt.content,
+            tools=tools,
+        )
+        response: LLMResult = await _llm_client.complete(
+            model_name=model_name,
             system_prompt=system_prompt,
             user_prompt=user_prompt.content,
             tools=tools,
             think_speed_gain=self.think_speed_gain,
         )
+        self.on_llm_response(world=world, response=response)
         self.append_busy_time(response.duration)
-
-        # Debug: 打印 LLM 日志到屏幕
-        if debug and response.log_file:
-            print(f"\n{'='*60}")
-            print(f"[Agent.react] Debug log: {response.log_file}")
-            print(f"{'='*60}")
-            try:
-                with open(response.log_file, "r", encoding="utf-8") as f:
-                    print(f.read())
-                print(f"{'='*60}\n")
-            except Exception as e:
-                print(f"[Agent.react] Failed to read log file: {e}")
-                print(f"{'='*60}\n")
 
         # 3. 解析 LLM 响应 (Act)
         cog_tar_tool_calls = self._parse_response(response, world)
@@ -317,6 +314,12 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
     def remove_mindset(self, soul_name:str, role_name:str, name: str) -> Mindset:
         return self.attention.get_soul(soul_name).get_role(role_name).remove_mindset(name)
+
+    def on_llm_prompt(self, *, world: World, model: str, system_prompt: str, user_prompt: str, tools: list):
+        pass
+
+    def on_llm_response(self, *, world: World, response: LLMResult):
+        pass
 
 
 class SwitchMindsetToParams(Params):

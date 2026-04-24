@@ -160,7 +160,7 @@ class Activity(BaseModel):
 class Channel(BaseModel):
     cognitive_target: str                     # 认知的目标对象别名
     target_id: str                            # 动作接收者 ID
-    budget: int | None = None                 # 观察上下文预算，默认无限预算
+    budget: int                               # 观察上下文预算
     allowed_actions: list[str] | None = None  # 允许的动作名称列表，默认允许所有动作
     cooldown: float = 0                       # 访问冷却时间，两次访问之间必须间隔的时长（秒），默认无冷却
     last_access: float = float('-inf')        # 上次访问时间戳，负无穷表示从未访问
