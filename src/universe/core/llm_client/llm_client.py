@@ -45,8 +45,6 @@ class LLMResult:
 class LLMClient(metaclass=SingletonMeta):
 
     CACHE_MAX_SIZE: int = 128
-    CACHE_DIR: Path | str = ".artifacts/llm_cache"
-    LOG_DIR: Path | str = ".artifacts/llm_logs"
     MAX_LOG_SESSIONS: int = 10
     BASE_THINK_SPEED: int = 15
 
@@ -55,8 +53,14 @@ class LLMClient(metaclass=SingletonMeta):
             config = Config()
         self._config = config
         self._clients: dict[str, AsyncOpenAI] = {}
-        self._cache = LLMCache(max_size=self.CACHE_MAX_SIZE, cache_dir=Path(self.CACHE_DIR))
-        self._logger = LLMLogger(Path(self.LOG_DIR), max_log_sessions=self.MAX_LOG_SESSIONS)
+
+        # 使用配置的 storage 路径
+        storage_path = Path(config.storage)
+        cache_dir = storage_path / "llm_cache"
+        log_dir = storage_path / "llm_logs"
+
+        self._cache = LLMCache(max_size=self.CACHE_MAX_SIZE, cache_dir=cache_dir)
+        self._logger = LLMLogger(log_dir, max_log_sessions=self.MAX_LOG_SESSIONS)
         self._validator = ToolArgumentsValidator()
 
     def _get_client(self, model: str | None = None) -> AsyncOpenAI:
@@ -107,6 +111,7 @@ class LLMClient(metaclass=SingletonMeta):
 
         # 尝试从缓存获取
         cache_hit = False
+        response_data: dict | None = None
         if self._cache is not None:
             cached = self._cache.get(
                 model=model_name,
@@ -121,7 +126,9 @@ class LLMClient(metaclass=SingletonMeta):
                 cache_hit = False
 
         # 缓存未命中，调用 API
-        if not cache_hit:
+        if cache_hit:
+            assert response_data is not None
+        else:
             params: dict[str, Any] = {
                 "model": model_name,
                 "messages": messages,
@@ -133,6 +140,7 @@ class LLMClient(metaclass=SingletonMeta):
 
             result = await self._get_client(model).chat.completions.create(**params)
             response_data = result.model_dump()
+            assert response_data is not None
 
             # 写入缓存
             if self._cache is not None:

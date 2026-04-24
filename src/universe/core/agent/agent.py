@@ -176,8 +176,13 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
     async def react(
         self,
         world: World,
+        debug: bool = False,
         ) -> None:
         """推理和决策阶段（LLM Call）
+
+        Args:
+            world: World 实例
+            debug: 是否打印 LLM 日志到屏幕，默认为 False
         """
 
         # 0. 工具集与Agent自身状态转移
@@ -208,6 +213,19 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
             think_speed_gain=self.think_speed_gain,
         )
         self.append_busy_time(response.duration)
+
+        # Debug: 打印 LLM 日志到屏幕
+        if debug and response.log_file:
+            print(f"\n{'='*60}")
+            print(f"[Agent.react] Debug log: {response.log_file}")
+            print(f"{'='*60}")
+            try:
+                with open(response.log_file, "r", encoding="utf-8") as f:
+                    print(f.read())
+                print(f"{'='*60}\n")
+            except Exception as e:
+                print(f"[Agent.react] Failed to read log file: {e}")
+                print(f"{'='*60}\n")
 
         # 3. 解析 LLM 响应 (Act)
         cog_tar_tool_calls = self._parse_response(response, world)

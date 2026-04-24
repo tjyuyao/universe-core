@@ -11,9 +11,7 @@ wheels/
 
 # Custom
 config.yml
-.claude/
-todo.md
 .coverage
-.artifacts/
+.storage/
 .trae/
-smoke.py
+.claude/

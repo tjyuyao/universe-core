@@ -1,11 +1,14 @@
+# 存储路径配置（默认: .storage）
+storage: .storage
+
 api_pool:
-    - 
+    -
         name: glm-4.7
         base_url: https://open.bigmodel.cn/api/paas/v4
         api_key: sk-xxxx
         model: glm-4.7
-    
-    - 
+
+    -
         name: glm-5
         base_url: https://opencode.ai/zen/go/v1/
         api_key: sk-xxxx
