@@ -95,7 +95,7 @@ class LLMClient(metaclass=SingletonMeta):
     async def complete(
         self,
         *,
-        model: str | None = None,
+        model_name: str | None = None,
         system_prompt: str | None = None,
         user_prompt: str | None = None,
         temperature: float = 0.7,
@@ -105,7 +105,7 @@ class LLMClient(metaclass=SingletonMeta):
         """完成一个 LLM 生成"""
 
         messages = self._build_messages(system_prompt, user_prompt)
-        llm_config: LLMConfig = self._config.get_llm_config(model)
+        llm_config: LLMConfig = self._config.get_llm_config(model_name)
         model_name = llm_config.model
         timestamp = datetime.now()
 
@@ -138,7 +138,7 @@ class LLMClient(metaclass=SingletonMeta):
             if tools:
                 params["tools"] = tools
 
-            result = await self._get_client(model).chat.completions.create(**params)
+            result = await self._get_client(model_name).chat.completions.create(**params)
             response_data = result.model_dump()
             assert response_data is not None
 

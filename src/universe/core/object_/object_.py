@@ -298,7 +298,7 @@ class Object(Serializable):
                     break
             self._busy_until = busy_until
 
-    async def observe(self, *, channel: Channel | None = None, world: World, observer_id: str | None = None) -> TimedStr:
+    async def observe(self, *, world: World, channel: Channel | None = None, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知马尔可夫毯可在此实现）"""
         state = self.observable_state_dict()
 

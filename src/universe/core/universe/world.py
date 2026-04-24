@@ -15,13 +15,15 @@ class World(Serializable):
     description: str
     _time: float             # 当前时间 (private)
     _init_time: float        # 世界开始时间 (const)
+    _random: random.Random   # 随机数生成器（普通属性，不参与序列化）
 
-    def __init__(self, name: str, description: str, init_time: float | None = None) -> None:
+    def __init__(self, name: str, description: str, init_time: float | None = None, random_seed: int | None = None) -> None:
         super().__init__()
         self.name = name
         self.description = description
         self._time = 0
         self._init_time = init_time or time.time()
+        self._random = random.Random(random_seed)
 
     @property
     def time(self) -> float:
@@ -49,7 +51,7 @@ class World(Serializable):
 
         # 随机化 Agent 执行顺序，避免固定顺序导致的抢占式不公平
         agents = list(self.agents.values())
-        random.shuffle(agents)
+        self._random.shuffle(agents)
 
         for agent in agents:
             await agent.react(self)
@@ -61,3 +63,17 @@ class World(Serializable):
                 busy_times.append(obj.busy_until)
         if busy_times:
             self._time = min(busy_times)
+
+    def state_dict(self) -> dict:
+        """返回包含随机状态的世界状态字典"""
+        state = super().state_dict()
+        state["_random_state"] = self._random.getstate()
+        return state
+
+    def load_state_dict(self, state_dict: dict) -> None:
+        """从状态字典加载世界状态（包括随机状态）"""
+        # 提取并移除随机状态，避免父类处理未知键
+        random_state = state_dict.pop("_random_state", None)
+        super().load_state_dict(state_dict)
+        if random_state is not None:
+            self._random.setstate(random_state)

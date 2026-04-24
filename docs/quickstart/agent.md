@@ -142,7 +142,7 @@ A **Channel** connects an Agent to a target Object. It defines:
 |-------|------|-------------|
 | `cognitive_target` | `str` | Alias the agent perceives (e.g. `"the_door"`) |
 | `target_id` | `str` | Actual object ID registered in the World |
-| `budget` | `int \| None` | Max observation tokens (warns if exceeded) |
+| `budget` | `int` | Max observation tokens (warns if exceeded) |
 | `allowed_actions` | `list[str] \| None` | Whitelist of action names the agent can invoke |
 
 ```python
