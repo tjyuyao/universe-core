@@ -160,11 +160,31 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
             action_name = tool_call["name"]
 
+            # 处理某些模型返回格式不正确的工具调用（action name 在 arguments 中）
+            # 示例：{'arguments': {'i_have_reasoned_that': 'Bob还没有回复我最后的问题（问他是哪里人），我的上一条消息已经在等他回复了。我应该确保记忆是最新的，然后等待Bob的回复。'}, 'name': ''} 应该是 {'arguments': {'content': '...'}, 'name':'i_have_reasoned_that'}
+            if not action_name and arguments:
+                action_name, arguments = self._recover_action_from_arguments(
+                    arguments, all_channels, world
+                )
+                if action_name:
+                    tool_call["name"] = action_name
+                    tool_call["arguments"] = arguments
+
+            # 跳过空名称的工具调用
+            if not action_name:
+                warnings.warn(f"Skipping tool call with empty name: {tool_call}")
+                continue
+
             # 查找支持该 action 的所有 Channel
             supporting_channels = [
                 ch for ch in all_channels.values()
                 if ch.has_action(action_name, world)
             ]
+
+            # 如果没有找到支持该 action 的 Channel，跳过并警告
+            if not supporting_channels:
+                warnings.warn(f"No channel supports action '{action_name}', skipping")
+                continue
 
             cognitive_target = arguments.get("target")
 
@@ -181,6 +201,75 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
             cog_tar_tool_calls.setdefault(cognitive_target, []).append(tool_call)
 
         return cog_tar_tool_calls
+
+    def _recover_action_from_arguments(
+        self,
+        arguments: dict,
+        all_channels: dict[str, Channel],
+        world: World,
+    ) -> tuple[str | None, dict]:
+        """从 arguments 中恢复 action name 并修复参数结构
+
+        某些模型（如 glm-5）可能返回格式错误的 tool call，将 action name
+        放在 arguments 的 key 中，且 value 是直接值而非 dict。
+        例如: {"i_have_reasoned_that": "reasoning content"}
+
+        修复逻辑：
+        1. 遍历 arguments 的 keys，找到匹配的 action name
+        2. 获取该 action 的 schema，确定参数名
+        3. 如果是单参数函数，用正确的参数名包装 value
+
+        Returns:
+            (action_name, fixed_arguments): 修复后的 action name 和参数
+            如果没有找到匹配的 action，返回 (None, arguments)
+        """
+        from ..object_ import Action
+
+        for potential_name in list(arguments.keys()):
+            # 查找支持该 action name 的 channel
+            matching_channels = [
+                ch for ch in all_channels.values()
+                if ch.has_action(potential_name, world)
+            ]
+            if not matching_channels:
+                continue
+
+            # 获取第一个匹配的 action
+            channel = matching_channels[0]
+            action = channel.get_action(potential_name, world)
+
+            # 从 action 的 Params 类型获取参数 schema
+            params_type = action.GetParamsType()
+            schema = params_type.model_json_schema()
+            required = schema.get("required", [])
+
+            # 获取嵌套的 value
+            nested_value = arguments[potential_name]
+
+            # 如果已经是 dict 格式，直接使用
+            if isinstance(nested_value, dict):
+                return potential_name, nested_value
+
+            # 单参数函数：用第一个 required 参数名包装 value
+            if len(required) == 1 and nested_value is not None:
+                param_name = required[0]
+                fixed_args = {param_name: nested_value}
+                warnings.warn(
+                    f"Recovered action '{potential_name}' with param '{param_name}'"
+                )
+                return potential_name, fixed_args
+
+            # 多参数但 value 是 dict：直接使用（LLM 可能正确返回了参数结构）
+            if isinstance(nested_value, dict):
+                return potential_name, nested_value
+
+            # 无法自动修复，跳过
+            warnings.warn(
+                f"Cannot auto-fix action '{potential_name}': "
+                f"requires {len(required)} params, got non-dict value"
+            )
+
+        return None, arguments
 
     def _inherit_busy_from_target(
         self,
