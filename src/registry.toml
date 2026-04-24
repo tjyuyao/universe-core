@@ -11,3 +11,7 @@
 # [chat]
 # git = "https://github.com/tjyuyao/universe-module-chat"
 # description = "Chat and messaging: Inbox, SendMessageAction"
+
+[memory]
+git = "ssh://git@git.hyuyao.cn:8022/sam/universe-module-memory.git"
+description = "Feature-rich human-like memory module with psychology-based memory retrieval, episodic/active dual-store, forgetting curve, spacing/testing effects, emotional intensity, and so on."
