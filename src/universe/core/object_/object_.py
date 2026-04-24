@@ -283,16 +283,18 @@ class Object(Serializable):
     async def transit(self, world: World) -> None:
         """对象状态转移"""
         if self.activities:
-            busy_until = self.activities[0].busy_until
+            activity = self.activities[0]
+            busy_until = self._busy_until
             while self.activities:
-                self.activities[0].action_invoke_time = busy_until
-                done = await self.activities[0].transit(self, world)
-                busy_until = self.activities[0].busy_until
+                activity.action_invoke_time = busy_until
+                done = await activity.transit(self, world)
                 if done:
                     # Action finished, so pop it from the list. (drop it)
                     self.activities.pop(0)
+                    busy_until = activity.busy_until
                 else:
                     # Action timeout, leave for next time.
+                    busy_until = world.time
                     break
             self._busy_until = busy_until
 
