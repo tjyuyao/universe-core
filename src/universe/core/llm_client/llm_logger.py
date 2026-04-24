@@ -1,3 +1,4 @@
+import json
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -73,6 +74,13 @@ class LLMLogger():
                 func = tc.get("function", {})
                 func_name = func.get("name", "unknown")
                 func_args = func.get("arguments", "")
+                # 解析 JSON 字符串并格式化输出，确保中文和 emoji 正常显示
+                if isinstance(func_args, str):
+                    try:
+                        parsed_args = json.loads(func_args)
+                        func_args = json.dumps(parsed_args, ensure_ascii=False, indent=2)
+                    except json.JSONDecodeError:
+                        pass  # 不是有效的 JSON，保持原样
                 tool_calls_md.append(f"**[{i+1}] {func_name}**\n\nArguments: `{func_args}`\n")
 
         # 构建 markdown 内容
@@ -116,8 +124,11 @@ class LLMLogger():
                 *tool_calls_md,
             ])
 
-        # 写入文件
-        log_file.write_text("\n".join(md_lines), encoding="utf-8")
+        # 写入文件（处理可能的 surrogate 字符）
+        content = "\n".join(md_lines)
+        # 清理 surrogate 字符，避免编码错误
+        content = content.encode("utf-8", errors="surrogatepass").decode("utf-8", errors="replace")
+        log_file.write_text(content, encoding="utf-8")
 
         return log_file
 
