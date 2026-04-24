@@ -15,12 +15,12 @@ import pydantic
 
 def get_embedding_config(name: str = "doubao-vision") -> "EmbeddingConfig":
     """从全局 Config 获取嵌入模型配置
-    
+
     如果 Config 中找不到配置，则返回默认的硬编码配置。
-    
+
     Args:
         name: 嵌入配置名称，默认为 "doubao-vision"
-        
+
     Returns:
         EmbeddingConfig 实例
     """

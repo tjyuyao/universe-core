@@ -1,4 +1,5 @@
 import time
+import random
 
 from typing import cast
 from ..timing import TEPS
@@ -39,11 +40,18 @@ class World(Serializable):
         return {obj.object_id: obj for obj in self.objects.values() if isinstance(obj, Agent)}
 
     async def step(self) -> None:
-        """世界步进（自适应步长）"""
+        """世界步进（自适应步长）
+
+        每步随机化 Agent 执行顺序，确保资源竞争时的公平性。
+        """
 
         self._time += TEPS
 
-        for agent in self.agents.values():
+        # 随机化 Agent 执行顺序，避免固定顺序导致的抢占式不公平
+        agents = list(self.agents.values())
+        random.shuffle(agents)
+
+        for agent in agents:
             await agent.react(self)
 
         # 更新时间

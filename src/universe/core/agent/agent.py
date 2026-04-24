@@ -91,6 +91,13 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         for channel in self.attention.get_current_channels().values():
             if channel.allowed_actions is None:
                 continue
+
+            # 过滤 busy 状态的独占式资源
+            target = world.objects[channel.target_id]
+            assert isinstance(target, Object)
+            if target.is_preemptive() and target.is_busy_at(world.time):
+                continue
+
             for action_name in channel.allowed_actions:
                 action_groups.setdefault(action_name, []).append(channel)
 
@@ -173,6 +180,42 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
         return cog_tar_tool_calls
 
+    def _inherit_busy_from_target(
+        self,
+        target: Object,
+        channel: Channel,
+        world: World,
+    ) -> None:
+        """根据目标资源和 channel 配置，更新 Agent 的 busy 状态。
+
+        实现独占式/并发型资源的 busy 继承逻辑，以及 channel cooldown 机制。
+
+        Args:
+            target: 目标对象
+            channel: 访问通道
+            world: World 实例
+        """
+        # 计算 effective busy（包含 cooldown 惩罚）
+        effective_busy = target._busy_until
+
+        # 应用 cooldown（独立于资源模式）
+        if channel.cooldown > 0:
+            time_since_last = world.time - channel.last_access
+            if time_since_last < channel.cooldown:
+                effective_busy += (channel.cooldown - time_since_last)
+
+        # 根据资源模式决定是否继承 busy
+        if target.is_preemptive():
+            # 独占式资源：继承完整 effective busy
+            self._busy_until = max(self._busy_until, effective_busy)
+        else:
+            # 并发型资源：只继承 cooldown 惩罚，不继承资源 busy
+            if channel.cooldown > 0:
+                # 记录该通道的最早可用时间（基于上次访问+cooldown，可能为过去时间）
+                self._busy_until = max(self._busy_until, channel.last_access + channel.cooldown)
+
+        channel.last_access = world.time
+
     async def react(
         self,
         world: World,
@@ -190,7 +233,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
             target = world.objects[channel.target_id]
             assert isinstance(target, Object)
             await target.transit(world)
-            self._busy_until = max(self._busy_until, target._busy_until)
+            self._inherit_busy_from_target(target, channel, world)
 
         if self.is_busy_at(world.time):
             return
@@ -202,6 +245,11 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         system_prompt = self._build_system_prompt(world)
         user_prompt = await self._build_user_prompt(world)  #  call observe()
         tools = self._build_tools(world)
+
+        # 如果没有可用工具，跳过当前 react()
+        if not tools:
+            return
+
         self.append_busy_time(user_prompt.duration)
 
         # 2. 调用 LLM (Think)

@@ -162,6 +162,8 @@ class Channel(BaseModel):
     target_id: str                            # 动作接收者 ID
     budget: int | None = None                 # 观察上下文预算，默认无限预算
     allowed_actions: list[str] | None = None  # 允许的动作名称列表，默认允许所有动作
+    cooldown: float = 0                       # 访问冷却时间，两次访问之间必须间隔的时长（秒），默认无冷却
+    last_access: float = float('-inf')        # 上次访问时间戳，负无穷表示从未访问
 
     def get_action(self, action_name: str, world: World) -> Action:
         """获取对象的指定动作"""
@@ -246,6 +248,18 @@ class Object(Serializable):
     def is_busy_at(self, time: float) -> bool:
         return self._busy_until > time
 
+    def is_preemptive(self) -> bool:
+        """
+        判断是否为独占式资源。
+
+        - True（默认）: 独占式资源，操作期间阻塞其他 Agent
+        - False: 并发型资源，允许多人同时观察，仅写入操作串行化
+
+        Returns:
+            bool: 是否为独占式资源
+        """
+        return True
+
     def tool_call_as_action(self, tool_call: ToolCall) -> tuple[Action, Params]:
         action_name = tool_call["name"]
         arguments = tool_call["arguments"]
@@ -284,7 +298,15 @@ class Object(Serializable):
 
     async def observe(self, *, channel: Channel | None = None, world: World, observer_id: str | None = None) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知马尔可夫毯可在此实现）"""
-        content = hjson.dumps(self.observable_state_dict(), ensure_ascii=False)
+        state = self.observable_state_dict()
+
+        # 添加 busy 状态信息帮助 Agent 理解决策约束
+        state["_meta"] = {
+            "is_busy": self.is_busy_at(world.time),
+            "busy_until": self._busy_until if self.is_busy_at(world.time) else None,
+        }
+
+        content = hjson.dumps(state, ensure_ascii=False)
         duration = self._observe_duration(content, world, observer_id)
         return TimedStr(duration=duration, content=content)
 
