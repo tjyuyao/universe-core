@@ -10,6 +10,7 @@ from .embedding_models import (
     cosine_similarity,
     euclidean_distance,
 )
+from .tool_call_fixer import recover_action_from_tool_call, fix_tool_call_format
 
 
 __all__ = [
@@ -26,4 +27,6 @@ __all__ = [
     "get_embedding_config",
     "cosine_similarity",
     "euclidean_distance",
+    "recover_action_from_tool_call",
+    "fix_tool_call_format",
 ]
