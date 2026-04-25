@@ -65,22 +65,30 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
     async def _build_user_prompt(self, world: World) -> TimedStr:
         """构建用户提示"""
         observe_duration = 0.0
-        contexts = {}
+        contexts: dict[str, str] = {}
         channels = self.attention.get_current_channels()
         model_name = self.attention.get_current_model_name()
         for channel in channels.values():
             target = world.objects[channel.target_id]
             assert isinstance(target, Object)
-            context = await target.observe(channel=channel, world=world, observer_id=self.agent_id)
-            observe_duration += context.duration  # observe duration
-            token_count = estimate_tokens(context, model=model_name)
+            timed_context = await target.observe(channel=channel, world=world, observer_id=self.agent_id)
+            observe_duration += timed_context.duration  # observe duration
+            token_count = estimate_tokens(timed_context.content, model=model_name)
             if token_count > channel.budget:
                 warnings.warn(BudgetWarning(token_count, channel.budget, channel.cognitive_target))
-            contexts[channel.cognitive_target] = context
+            contexts[channel.cognitive_target] = timed_context.content or ""
+
+        # 手动格式化上下文，避免 dict 的 repr 导致的转义符问题
+        context_parts = []
+        for cognitive_target, content in contexts.items():
+            context_parts.append(f"=== {cognitive_target} ===\n{content}")
+        context_str = "\n\n".join(context_parts)
+
         return TimedStr(
             duration=observe_duration,
             content=f"""你当前能意识和观察到的完整上下文信息如下，请阅读后决定工具调用行为：
-{contexts}""")
+
+{context_str}""")
 
     def _build_tools(self, world: World) -> list[dict]:
         tools = []
