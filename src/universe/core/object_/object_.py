@@ -23,7 +23,9 @@ class Params(BaseModel):
 
     @classmethod
     def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
-        return cls.model_json_schema()
+        params_schema = cls.model_json_schema()
+        del params_schema["description"]
+        return params_schema
 
 
 class Action(Generic[O, P], metaclass=GenericsMeta):
