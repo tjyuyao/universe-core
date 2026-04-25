@@ -1,14 +1,22 @@
 import hjson  # type: ignore
 import tiktoken  # type: ignore
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from pydantic import BaseModel
 from ..config import Config
+
+
+if TYPE_CHECKING:
+    from ..agent.agent import Agent
 
 
 _config = Config()
 
 
-def estimate_tokens(content: Any, model: str | None = None) -> int:
+def estimate_tokens(
+    content: Any,
+    model: str | None = None,
+    observer: Agent | None = None,
+) -> int:
     """使用 tiktoken 估算内容的 token 数
 
     Args:
@@ -27,7 +35,10 @@ def estimate_tokens(content: Any, model: str | None = None) -> int:
         text = hjson.dumps(content, ensure_ascii=False)
 
     try:
-        encoding = tiktoken.encoding_for_model(model or _config.get_llm_config().model)
+        if observer:
+            model = observer.attention.get_current_model_name()
+        model = model or _config.get_llm_config().model
+        encoding = tiktoken.encoding_for_model(model)
     except KeyError:
         # 未知模型使用 cl100k_base（gpt-4 的编码）
         encoding = tiktoken.get_encoding("cl100k_base")
