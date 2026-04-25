@@ -71,7 +71,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         for channel in channels.values():
             target = world.objects[channel.target_id]
             assert isinstance(target, Object)
-            timed_context = await target.observe(channel=channel, world=world, observer_id=self.agent_id)
+            timed_context = await target.observe(channel=channel, world=world, observer=self)
             observe_duration += timed_context.duration  # observe duration
             token_count = estimate_tokens(timed_context.content, model=model_name)
             if token_count > channel.budget:
@@ -109,8 +109,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
                 proposed = channel.allowed_actions
 
             # Object 侧动态过滤
-            # 约束：要求此方法在 target.observe() 之后调用，因此必须保证 _build_user_prompt() 的调用在 _build_tools() 之前。
-            allowed = target.filter_actions(world, proposed)
+            allowed = target.filter_actions(world, proposed, channel=channel, observer=self)
 
             for action_name in allowed:
                 action_groups.setdefault(action_name, []).append(channel)

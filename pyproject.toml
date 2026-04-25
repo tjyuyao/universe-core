@@ -1,7 +1,7 @@
 [project]
 name = "universe-core"
-version = "0.2.3"
-description = "Add your description here"
+version = "0.3.0"
+description = "Universe Project is a simulation framework where LLM-powered Agents interact with Objects in a World through an observe-think-act loop with logical time."
 readme = "README.md"
 authors = [
     { name = "Yuyao Huang (Sam)", email = "huangyuyao@outlook.com" }

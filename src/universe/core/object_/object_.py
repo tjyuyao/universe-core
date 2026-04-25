@@ -213,21 +213,20 @@ class Object(Serializable):
     def busy_until(self) -> float:
         return self._busy_until
 
-    def _observe_duration(self, content: str, world: World | None = None, observer_id: str | None = None) -> float:
+    def _observe_duration(
+        self,
+        content: str,
+        world: World | None = None,
+        observer: "Agent | None" = None,
+    ) -> float:
         """计算观察对象状态的持续时间"""
         token_count = estimate_tokens(content)
         read_speed_gain: float
-        if world is None or observer_id is None:
+        if observer is None:
             read_speed_gain = 1.0
         else:
-            observer = world.objects[observer_id]
-            # Lazy import Agent to avoid circular import at module load time
-            from ..agent import Agent
-            if isinstance(observer, Agent):
-                read_speed_gain = observer.read_speed_gain
-                assert read_speed_gain > 0, f"Observer {observer_id}'s read speed gain must be greater than 0"
-            else:
-                read_speed_gain = 1.0
+            read_speed_gain = observer.read_speed_gain
+            assert read_speed_gain > 0, f"Observer {observer.object_id}'s read speed gain must be greater than 0"
         assert self.read_speed > 0, f"Object {self.object_id}'s read speed must be greater than 0"
         return token_count / (self.read_speed * read_speed_gain)
 
@@ -260,18 +259,24 @@ class Object(Serializable):
         """
         return True
 
-    def filter_actions(self, world: "World", proposed_actions: list[str]) -> list[str]:
+    def filter_actions(
+        self,
+        world: "World",
+        proposed_actions: list[str],
+        *,
+        channel: Channel | None = None,
+        observer: "Agent | None" = None,
+    ) -> list[str]:
         """根据当前状态过滤可用的 actions。
 
         Object 可重写此方法，根据内部状态（如预算、容量等）
         动态控制哪些 actions 对 Agent 可见。
 
-        调用顺序保证：此方法总是在 observe() 之后立即调用。
-        因此，此方法可以依赖于 observe() 中更新的 self 状态进行决策。
-
         Args:
             world: World 实例
             proposed_actions: Agent 提议的 action 名称列表（已通过 Channel.allowed_actions 初步过滤）
+            channel: 观察通道，包含 budget 限制等信息
+            observer: 观察者 Agent
 
         Returns:
             实际可用的 action 名称列表
@@ -316,7 +321,13 @@ class Object(Serializable):
                     break
             self._busy_until = busy_until
 
-    async def observe(self, *, world: World, channel: Channel | None = None, observer_id: str | None = None) -> TimedStr:
+    async def observe(
+        self,
+        *,
+        world: World,
+        channel: Channel | None = None,
+        observer: "Agent | None" = None,
+    ) -> TimedStr:
         """观察对象状态，将被嵌入到 LLM 的上下文信息中（感知马尔可夫毯可在此实现）"""
         state = self.observable_state_dict()
 
@@ -327,7 +338,7 @@ class Object(Serializable):
         }
 
         content = hjson.dumps(state, ensure_ascii=False)
-        duration = self._observe_duration(content, world, observer_id)
+        duration = self._observe_duration(content, world, observer)
         return TimedStr(duration=duration, content=content)
 
     async def act(self, activity: Activity) -> None:

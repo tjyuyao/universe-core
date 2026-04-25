@@ -73,7 +73,6 @@ def recover_action_from_tool_call(
         (action_name, fixed_arguments): 修复后的 action name 和参数
         如果无法修复，返回 (None, arguments)
     """
-    from ..object_ import Action
 
     # 首先尝试新格式：空字符串键包含 action name
     if "" in arguments:
