@@ -266,6 +266,9 @@ class Object(Serializable):
         Object 可重写此方法，根据内部状态（如预算、容量等）
         动态控制哪些 actions 对 Agent 可见。
 
+        调用顺序保证：此方法总是在 observe() 之后立即调用。
+        因此，此方法可以依赖于 observe() 中更新的 self 状态进行决策。
+
         Args:
             world: World 实例
             proposed_actions: Agent 提议的 action 名称列表（已通过 Channel.allowed_actions 初步过滤）

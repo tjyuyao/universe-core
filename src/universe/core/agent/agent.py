@@ -101,6 +101,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
                 proposed = channel.allowed_actions
 
             # Object 侧动态过滤
+            # 约束：要求此方法在 target.observe() 之后调用，因此必须保证 _build_user_prompt() 的调用在 _build_tools() 之前。
             allowed = target.filter_actions(world, proposed)
 
             for action_name in allowed:
