@@ -96,9 +96,12 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
 
             # allowed_actions 为 None 表示允许所有 actions
             if channel.allowed_actions is None:
-                allowed = list(target.actions.keys())
+                proposed = list(target.actions.keys())
             else:
-                allowed = channel.allowed_actions
+                proposed = channel.allowed_actions
+
+            # Object 侧动态过滤
+            allowed = target.filter_actions(world, proposed)
 
             for action_name in allowed:
                 action_groups.setdefault(action_name, []).append(channel)

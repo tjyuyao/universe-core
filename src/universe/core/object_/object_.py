@@ -260,6 +260,21 @@ class Object(Serializable):
         """
         return True
 
+    def filter_actions(self, world: "World", proposed_actions: list[str]) -> list[str]:
+        """根据当前状态过滤可用的 actions。
+
+        Object 可重写此方法，根据内部状态（如预算、容量等）
+        动态控制哪些 actions 对 Agent 可见。
+
+        Args:
+            world: World 实例
+            proposed_actions: Agent 提议的 action 名称列表（已通过 Channel.allowed_actions 初步过滤）
+
+        Returns:
+            实际可用的 action 名称列表
+        """
+        return proposed_actions
+
     def tool_call_as_action(self, tool_call: ToolCall) -> tuple[Action, Params]:
         action_name = tool_call["name"]
         arguments = tool_call["arguments"]
