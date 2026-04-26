@@ -3,7 +3,7 @@ import random
 
 from typing import cast
 from ..timing import TEPS, TINF
-from ..object_ import Serializable, Object
+from ..object_ import Serializable, Object, PrivateState
 from ..agent import Agent
 
 
@@ -13,11 +13,11 @@ class World(Serializable):
 
     name: str
     description: str
-    _time: float             # 当前时间 (private)
-    _init_time: float        # 世界开始时间 (const)
-    _random: random.Random   # 随机数生成器（普通属性，不参与序列化）
+    _time: PrivateState[float]  # 当前时间 (private, 会序列化但不参与观察)
+    _init_time: float             # 世界开始时间 (const)
+    _random: random.Random        # 随机数生成器（普通属性，不参与序列化）
 
-    def __init__(self, name: str, description: str, init_time: float | None = None, random_seed: int | None = None) -> None:
+    def __init__(self, name: str, description: str, init_time: float | None = None, random_seed: int = 42) -> None:
         super().__init__()
         self.name = name
         self.description = description

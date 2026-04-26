@@ -96,12 +96,17 @@ class Serializable:
         """序列化状态变量到字典"""
         if isinstance(state, (int, float, str, bool, type(None))):
             return state
-        elif isinstance(state, (list, tuple, dict)):
+        elif isinstance(state, (list, tuple)):
+            # 递归处理列表/元组中的元素（支持 BaseModel 对象）
+            serialized_list = [Serializable.serialize_state(item, f"{name}[{i}]") for i, item in enumerate(state)]
+            return serialized_list if isinstance(state, list) else tuple(serialized_list)
+        elif isinstance(state, dict):
+            # 递归处理字典中的值
             try:
-                json.dumps(state, ensure_ascii=False)
-            except TypeError:
-                raise TypeError(f"State variable '{name}' is not serializable")
-            return state
+                serialized_dict = {k: Serializable.serialize_state(v, f"{name}.{k}") for k, v in state.items()}
+                return serialized_dict
+            except (TypeError, PydanticSerializationError) as e:
+                raise TypeError(f"State variable '{name}' is not serializable: {e}")
         elif isinstance(state, BaseModel):
             try:
                 data = state.model_dump()
@@ -155,8 +160,14 @@ class Serializable:
 
             if isinstance(state, (int, float, str, bool, type(None))):
                 self._states[name] = state_dict[name]
-            elif isinstance(state, (list, tuple, dict)):
-                self._states[name] = state_dict[name]
+            elif isinstance(state, (list, tuple)):
+                # 尝试检测列表项类型并重建 BaseModel 对象
+                assert isinstance(state_dict[name], (list, tuple))
+                deserialized = self._deserialize_list(state, list(state_dict[name]), name)
+                self._states[name] = deserialized if isinstance(state, list) else tuple(deserialized)
+            elif isinstance(state, dict):
+                # 递归处理字典中的值
+                self._states[name] = self._deserialize_dict(state, state_dict[name], name)
             elif isinstance(state, BaseModel):
                 self._states[name] = state.model_validate(state_dict[name])
             elif isinstance(state, BaseState):
@@ -174,6 +185,41 @@ class Serializable:
             if name not in used_keys:
                 warnings.warn(f"Unused key '{name}' in state dict", UserWarning)
 
+    @staticmethod
+    def _deserialize_list(original: list[Any] | tuple[Any, ...], data: list[Any], name: str) -> list[Any]:
+        """反序列化列表，尝试重建 BaseModel 对象。
+
+        如果原列表非空且第一项是 BaseModel，则将数据项也重建为同类型 BaseModel。
+        否则直接返回数据。
+        """
+        if not original or not data:
+            return data
+
+        sample = original[0] if original else None
+        if isinstance(sample, BaseModel) and isinstance(data[0], dict):
+            # 原列表包含 BaseModel，尝试重建
+            model_class = type(sample)
+            try:
+                return [model_class.model_validate(item) for item in data]
+            except Exception:
+                # 如果重建失败，返回原始数据
+                return data
+        return data
+
+    @staticmethod
+    def _deserialize_dict(original: dict[str, Any], data: dict[str, Any], name: str) -> dict[str, Any]:
+        """反序列化字典，递归处理值中的 BaseModel 列表。"""
+        result: dict[str, Any] = {}
+        for key, value in data.items():
+            orig_value = original.get(key)
+            if isinstance(orig_value, list) and isinstance(value, list):
+                result[key] = Serializable._deserialize_list(orig_value, value, f"{name}.{key}")
+            elif isinstance(orig_value, dict) and isinstance(value, dict):
+                result[key] = Serializable._deserialize_dict(orig_value, value, f"{name}.{key}")
+            else:
+                result[key] = value
+        return result
+
     def register_object(self, name: str, obj: Serializable) -> None:
         """注册一个对象"""
         if name in self._objects:
@@ -189,27 +235,10 @@ class Serializable:
         if name in self._objects:
             raise ValueError(f"State variable and object cannot have the same name '{name}'")
 
-        # 检查状态变量是否可序列化
-        if isinstance(state, (int, float, str, bool, type(None))):
-            pass
-        elif isinstance(state, (list, tuple, dict)):
-            try:
-                json.dumps(state, ensure_ascii=False)
-            except TypeError:
-                raise TypeError(f"State variable '{name}' is not serializable")
-        elif isinstance(state, BaseModel):
-            try:
-                data = state.model_dump()
-                json.dumps(data, ensure_ascii=False)
-            except (TypeError, PydanticSerializationError):
-                raise TypeError(f"State variable '{name}' is not serializable")
-        elif isinstance(state, BaseState):
-            try:
-                data = state.model_dump()
-                json.dumps(data, ensure_ascii=False)
-            except (TypeError, PydanticSerializationError):
-                raise TypeError(f"State variable '{name}' is not serializable")
-        else:
-            raise TypeError(f"Unsupported state variable type '{type(state)}'")
+        # 检查状态变量是否可序列化（使用 serialize_state 进行验证）
+        try:
+            Serializable.serialize_state(state, name)
+        except TypeError as e:
+            raise TypeError(f"State variable '{name}' is not serializable") from e
 
         self._states[name] = state

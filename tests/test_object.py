@@ -220,6 +220,133 @@ class TestStateSerializationRoundtrip:
         with pytest.raises(ValueError, match="circular reference"):
             node1.child = node1  # type: ignore
 
+    def test_list_of_basemodel_state_roundtrip(self):
+        """load_state_dict should properly restore list[BaseModel] state fields.
+
+        Note: When the original list is empty, the generic load_state_dict cannot
+        determine the item type. Classes using list[BaseModel] should override
+        load_state_dict to properly reconstruct list items.
+        """
+
+        class ItemModel(BaseModel):
+            """An item model for testing list serialization"""
+            id: int
+            name: str
+            active: bool = True
+
+        class ObjectWithList(Object):
+            """Object with list of BaseModel state - demonstrates custom load_state_dict"""
+            items: State[list[ItemModel]]
+            empty_items: State[list[ItemModel]]
+
+            def __init__(self, object_id: str):
+                super().__init__(object_id=object_id)
+                self.items = []
+                self.empty_items = []
+
+            def load_state_dict(self, state_dict: dict) -> None:
+                """Custom load to reconstruct ItemModel objects from dicts."""
+                super().load_state_dict(state_dict)
+                # Reconstruct ItemModel objects from serialized dicts
+                if "items" in state_dict:
+                    self.items = [
+                        ItemModel.model_validate(item) if isinstance(item, dict) else item
+                        for item in self.items
+                    ]
+
+        obj = ObjectWithList("list_test")
+
+        # Add some items
+        obj.items = [
+            ItemModel(id=1, name="first"),
+            ItemModel(id=2, name="second", active=False),
+            ItemModel(id=3, name="third"),
+        ]
+
+        # Save state
+        saved_state = obj.state_dict()
+
+        # Verify serialized correctly (should be dicts, not BaseModel objects)
+        assert len(saved_state["items"]) == 3
+        assert saved_state["items"][0]["id"] == 1
+        assert saved_state["items"][0]["name"] == "first"
+        assert saved_state["items"][1]["active"] is False
+        assert saved_state["empty_items"] == []
+
+        # Create new object and load state
+        new_obj = ObjectWithList("list_test")
+        new_obj.load_state_dict(saved_state)
+
+        # Verify items were properly restored as ItemModel instances
+        assert len(new_obj.items) == 3
+        assert isinstance(new_obj.items[0], ItemModel)
+        assert new_obj.items[0].id == 1
+        assert new_obj.items[0].name == "first"
+        assert new_obj.items[0].active is True
+        assert new_obj.items[1].active is False
+        assert new_obj.items[2].id == 3
+
+        # Empty list should remain empty
+        assert new_obj.empty_items == []
+
+    def test_nested_list_in_dict_state_roundtrip(self):
+        """load_state_dict should properly restore nested lists in dict state.
+
+        Note: Nested structures with list[BaseModel] require custom load_state_dict
+        to properly reconstruct all BaseModel instances.
+        """
+
+        class ItemModel(BaseModel):
+            """An item model for testing nested serialization"""
+            value: int
+
+        class ObjectWithNestedStructure(Object):
+            """Object with nested structures containing BaseModel lists"""
+            data: State[dict[str, list[ItemModel]]]
+
+            def __init__(self, object_id: str):
+                super().__init__(object_id=object_id)
+                self.data = {"group1": [], "group2": []}
+
+            def load_state_dict(self, state_dict: dict) -> None:
+                """Custom load to reconstruct nested ItemModel objects."""
+                super().load_state_dict(state_dict)
+                # Reconstruct ItemModel objects in nested dict structure
+                for key in self.data:
+                    if key in self.data and isinstance(self.data[key], list):
+                        self.data[key] = [
+                            ItemModel.model_validate(item) if isinstance(item, dict) else item
+                            for item in self.data[key]
+                        ]
+
+        obj = ObjectWithNestedStructure("nested_test")
+
+        # Add items to nested structure
+        obj.data = {
+            "group1": [ItemModel(value=10), ItemModel(value=20)],
+            "group2": [ItemModel(value=30)],
+        }
+
+        # Save state
+        saved_state = obj.state_dict()
+
+        # Verify serialized correctly
+        assert len(saved_state["data"]["group1"]) == 2
+        assert saved_state["data"]["group1"][0]["value"] == 10
+        assert saved_state["data"]["group2"][0]["value"] == 30
+
+        # Create new object and load state
+        new_obj = ObjectWithNestedStructure("nested_test")
+        new_obj.load_state_dict(saved_state)
+
+        # Verify nested structure was properly restored
+        assert len(new_obj.data["group1"]) == 2
+        assert isinstance(new_obj.data["group1"][0], ItemModel)
+        assert new_obj.data["group1"][0].value == 10
+        assert new_obj.data["group1"][1].value == 20
+        assert len(new_obj.data["group2"]) == 1
+        assert new_obj.data["group2"][0].value == 30
+
 
 class TestActivityExecution:
     """Test Activity execution with ActionExecutionContext"""
