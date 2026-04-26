@@ -15,3 +15,4 @@ class TimedStr(BaseModel):
 
 
 TEPS = 1e-3
+TINF = 1e6

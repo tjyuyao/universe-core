@@ -1,8 +1,12 @@
 from pydantic import BaseModel, Field
-from ..object_ import Generic, Object, Action, Channel
+from ..config import Config
+from ..object_ import Channel
 from .mindset import Mindset
 from .role import Role
 from .soul import Soul
+
+
+_config = Config()
 
 
 class Attention(BaseModel):
@@ -33,5 +37,7 @@ class Attention(BaseModel):
     def get_current_channels(self) -> dict[str, Channel]:
         return self.get_current_mindset().channels
 
-    def get_current_model_name(self) -> str | None:
-        return self.get_current_mindset().model
+    def get_current_model_name(self) -> str:
+        model_name = self.get_current_mindset().model
+        model_name = _config.get_llm_config(model_name).model
+        return model_name

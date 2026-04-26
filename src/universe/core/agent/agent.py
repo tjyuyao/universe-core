@@ -253,6 +253,7 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
     async def react(
         self,
         world: World,
+        final: bool = False,
         ) -> None:
         """推理和决策阶段（LLM Call）
 
@@ -277,16 +278,9 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         system_prompt = self._build_system_prompt(world)
         user_prompt = await self._build_user_prompt(world)  #  call observe()
         tools = self._build_tools(world)
-
-        # 如果没有可用工具，跳过当前 react()
-        if not tools:
-            return
-
         self.append_busy_time(user_prompt.duration)
-
-        # 2. 调用 LLM (Think)
+        
         assert user_prompt.content is not None
-        model_name = _llm_client._config.get_llm_config(model_name).model
         self.on_llm_prompt(
             world=world,
             model=model_name,
@@ -294,6 +288,16 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
             user_prompt=user_prompt.content,
             tools=tools,
         )
+        
+        # 如果没有可用工具，跳过当前 react()
+        if not tools:
+            return
+        
+        # 如果是最后一次观察，直接返回
+        if final:
+            return
+
+        # 2. 调用 LLM (Think)
         response: LLMResult = await _llm_client.complete(
             model_name=model_name,
             system_prompt=system_prompt,

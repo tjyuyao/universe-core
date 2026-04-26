@@ -24,7 +24,8 @@ class Params(BaseModel):
     @classmethod
     def param_json_schema(cls, channel: Channel, world: World) -> dict[str, Any]:
         params_schema = cls.model_json_schema()
-        del params_schema["description"]
+        if "description" in params_schema:
+            del params_schema["description"]
         return params_schema
 
 

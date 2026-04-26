@@ -2,8 +2,8 @@ import time
 import random
 
 from typing import cast
-from ..timing import TEPS
-from ..object_ import Serializable, Object, Activity
+from ..timing import TEPS, TINF
+from ..object_ import Serializable, Object
 from ..agent import Agent
 
 
@@ -40,7 +40,7 @@ class World(Serializable):
     @property
     def agents(self) -> dict[str, Agent]:
         return {obj.object_id: obj for obj in self.objects.values() if isinstance(obj, Agent)}
-
+        
     async def step(self) -> None:
         """世界步进（自适应步长）
 
@@ -57,12 +57,22 @@ class World(Serializable):
             await agent.react(self)
 
         # 更新时间
-        busy_times = []
-        for obj in self.objects.values():
-            if isinstance(obj, Agent):
-                busy_times.append(obj.busy_until)
+        busy_times = [obj.busy_until for obj in self.agents.values()]
         if busy_times:
             self._time = min(busy_times)
+                
+    async def finalize(self, time: float = TINF) -> None:
+        """完成世界运行，确保所有 Agent 都完成其任务。"""
+        
+        # 随机化 Agent 执行顺序，避免固定顺序导致的抢占式不公平
+        agents = list(self.agents.values())
+        self._random.shuffle(agents)
+        
+        # 更新时间
+        self._time = self._time + time
+        
+        for agent in agents:
+            await agent.react(self, final=True)
 
     def state_dict(self) -> dict:
         """返回包含随机状态的世界状态字典"""
