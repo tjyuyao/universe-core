@@ -67,6 +67,7 @@ class ActionExecutionStatus(str, Enum):
 class TimedStatus(BaseModel):
     duration: float
     status: ActionExecutionStatus
+    message: str = ""
     terminal: bool = False  # 是否为终端动作，即是否为当前轮的最后一次工具调用
 
 
