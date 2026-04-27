@@ -2,7 +2,7 @@ import json
 import warnings
 from pydantic_core import PydanticSerializationError
 from pydantic import BaseModel
-from typing import Any, ClassVar, get_type_hints
+from typing import Any, ClassVar, get_type_hints, get_origin, get_args
 
 from .state import BaseState, is_state_annotation, is_private_state_annotation
 
@@ -150,6 +150,34 @@ class Serializable:
 
         return destination
 
+    @staticmethod
+    def _get_list_element_type(cls: type, field_name: str) -> type | None:
+        """从类型注解中提取列表的元素类型。
+        
+        例如: State[list[Activity]] -> Activity
+        """
+        try:
+            hints = get_type_hints(cls, include_extras=True)
+            if field_name not in hints:
+                return None
+            
+            hint = hints[field_name]
+            # 解包 State[T] 或 PrivateState[T]
+            origin = get_origin(hint)
+            if origin is not None:
+                args = get_args(hint)
+                if args:
+                    inner_type = args[0]
+                    # 检查是否是 list[T]
+                    inner_origin = get_origin(inner_type)
+                    if inner_origin is list:
+                        inner_args = get_args(inner_type)
+                        if inner_args:
+                            return inner_args[0]
+            return None
+        except Exception:
+            return None
+
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
         """从状态字典加载对象的状态"""
         used_keys: set[str] = set()
@@ -163,7 +191,11 @@ class Serializable:
             elif isinstance(state, (list, tuple)):
                 # 尝试检测列表项类型并重建 BaseModel 对象
                 assert isinstance(state_dict[name], (list, tuple))
-                deserialized = self._deserialize_list(state, list(state_dict[name]), name)
+                # 从类型注解获取元素类型
+                element_type = self._get_list_element_type(type(self), name)
+                deserialized = self._deserialize_list(
+                    state, list(state_dict[name]), name, element_type=element_type
+                )
                 self._states[name] = deserialized if isinstance(state, list) else tuple(deserialized)
             elif isinstance(state, dict):
                 # 递归处理字典中的值
@@ -186,24 +218,41 @@ class Serializable:
                 warnings.warn(f"Unused key '{name}' in state dict", UserWarning)
 
     @staticmethod
-    def _deserialize_list(original: list[Any] | tuple[Any, ...], data: list[Any], name: str) -> list[Any]:
+    def _deserialize_list(
+        original: list[Any] | tuple[Any, ...],
+        data: list[Any],
+        name: str,
+        element_type: type | None = None
+    ) -> list[Any]:
         """反序列化列表，尝试重建 BaseModel 对象。
 
         如果原列表非空且第一项是 BaseModel，则将数据项也重建为同类型 BaseModel。
+        如果提供了 element_type，则使用它来重建 BaseModel 对象。
         否则直接返回数据。
         """
-        if not original or not data:
+        if not data:
             return data
 
-        sample = original[0] if original else None
-        if isinstance(sample, BaseModel) and isinstance(data[0], dict):
-            # 原列表包含 BaseModel，尝试重建
-            model_class = type(sample)
+        # 优先使用从类型注解获取的元素类型
+        if element_type is not None and issubclass(element_type, BaseModel):
             try:
-                return [model_class.model_validate(item) for item in data]
+                return [element_type.model_validate(item) for item in data]
             except Exception:
-                # 如果重建失败，返回原始数据
-                return data
+                # 如果重建失败，回退到运行时检测
+                pass
+
+        # 运行时检测（原逻辑作为 fallback）
+        if original:
+            sample = original[0]
+            if isinstance(sample, BaseModel) and isinstance(data[0], dict):
+                # 原列表包含 BaseModel，尝试重建
+                model_class = type(sample)
+                try:
+                    return [model_class.model_validate(item) for item in data]
+                except Exception:
+                    # 如果重建失败，返回原始数据
+                    return data
+        
         return data
 
     @staticmethod
