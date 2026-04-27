@@ -308,6 +308,12 @@ Mindset({self.attention.get_current_mindset().name}): {self.attention.get_curren
         self.on_llm_response(world=world, response=response)
         self.append_busy_time(response.duration)
 
+        # 清理已消费的 last_activity_result
+        for channel in self.attention.get_current_channels().values():
+            target = world.objects[channel.target_id]
+            assert isinstance(target, Object)
+            target.last_activity_result = {}
+
         # 3. 解析 LLM 响应 (Act)
         cog_tar_tool_calls = self._parse_response(response, world)
         all_channels = self.attention.get_current_channels()

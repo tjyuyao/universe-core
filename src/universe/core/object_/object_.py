@@ -77,6 +77,7 @@ class ActionExecutionContext(BaseModel):
     start_time: float | None = None  # 动作开始时间，None 表示未开始
     duration: float = 0              # 动作执行时间，单位：逻辑秒
     status: ActionExecutionStatus = ActionExecutionStatus.PENDING  # 动作调用实时状态
+    error: str = ""                  # 执行错误信息
 
     @property
     def end_time(self) -> float:
@@ -136,6 +137,8 @@ class Activity(BaseModel):
             context.duration = result.duration
             # Set the status of the current context. (previous None)
             context.status = result.status
+            # Set the error of the current context.
+            context.error = result.error
             # Return Case 4: Action is terminal, fail all subsequent contexts, so done (True).
             if result.terminal:
                 for remaining in self.action_contexts.values():
@@ -196,6 +199,7 @@ class Object(Serializable):
     read_speed: PrivateState[float]          # 观察对象状态的速度，单位为 tokens/second
     activities: PrivateState[list[Activity]] # 等待执行的动作请求包
     _busy_until: PrivateState[float]         # 最后一次执行动作的结束时间
+    last_activity_result: State[dict[str, Any]]  # 最近一次 Activity 的执行结果
 
     def __init__(self, object_id: str, *,
                  actions: list[Action] | None = None,
@@ -207,6 +211,7 @@ class Object(Serializable):
         self.read_speed = read_speed or self.DEFAULT_READ_SPEED
         self.activities = []
         self._busy_until = 0.0
+        self.last_activity_result = {}
 
     @property
     def objects(self) -> dict[str, Object]:
@@ -316,14 +321,27 @@ class Object(Serializable):
                 activity.action_invoke_time = busy_until
                 done = await activity.transit(self, world)
                 if done:
-                    # Action finished, so pop it from the list. (drop it)
+                    self._capture_activity_result(activity)
                     self.activities.pop(0)
                     busy_until = activity.busy_until
                 else:
-                    # Action timeout, leave for next time.
                     busy_until = world.time
                     break
             self._busy_until = busy_until
+
+    def _capture_activity_result(self, activity: Activity) -> None:
+        """捕获 Activity 执行结果."""
+        results: list[dict[str, Any]] = []
+        for context in activity.action_contexts.values():
+            results.append({
+                "action": context.tool_call["name"],
+                "status": context.status.value,
+                "error": context.error,
+            })
+        self.last_activity_result = {
+            "actor_id": activity.actor_id,
+            "results": results,
+        }
 
     async def observe(
         self,
